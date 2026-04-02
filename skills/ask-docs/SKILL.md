@@ -1,11 +1,11 @@
 ---
 name: ask-docs
-description: "Query the official CrewAI documentation via its live MCP server. Use when the user has a CrewAI question that isn't fully covered by the getting-started, design-agent, design-task, or optimize-flow skills — e.g., specific API details, configuration options, advanced features, troubleshooting errors, or anything where the latest docs are the best source of truth."
+description: "Query the official CrewAI documentation for answers. Use when the user has a CrewAI question that isn't fully covered by the getting-started, design-agent, design-task skills — e.g., specific API details, configuration options, advanced features, troubleshooting errors, enterprise features, tool references, or anything where the latest docs are the best source of truth."
 ---
 
 # Ask CrewAI Docs
 
-Use the live CrewAI documentation to answer questions with up-to-date, authoritative information.
+Answer CrewAI questions by looking up the official documentation at `docs.crewai.com`.
 
 ---
 
@@ -19,80 +19,69 @@ Use this skill when:
 - The question is about a newer or less common CrewAI feature (e.g., telemetry, testing, CLI commands, deployment, enterprise features)
 - You're unsure whether your knowledge is current — the docs reflect the latest published state
 
-**Do NOT use this skill** when the question is clearly answered by one of the other skills (getting-started, design-agent, design-task, optimize-flow). Those skills contain curated, opinionated guidance. This skill is for filling gaps and verifying details.
+**Do NOT use this skill** when the question is clearly answered by one of the other skills (getting-started, design-agent, design-taskf). Those skills contain curated, opinionated guidance. This skill is for filling gaps and verifying details.
 
 ---
 
 ## How to Query the Docs
 
-Try the approaches below in order. Use the first one that's available.
+### Step 1: Fetch the docs index
 
-### Option 1: CrewAI Docs MCP Server (Preferred)
+The CrewAI docs site publishes an `llms.txt` file — a structured index of every documentation page with descriptions. Fetch it first to find the right page:
 
-If the `crewai-docs` MCP server is configured, use its tools directly to search and read documentation. This is the best experience — structured search with full page content.
+```
+WebFetch: https://docs.crewai.com/llms.txt
+```
 
-<!--### Option 2: WebFetch Fallback
+This returns a categorized list of all doc pages in the format:
 
-If the MCP server is not configured, fall back to fetching docs via the web:
+```
+- [Page Title](https://docs.crewai.com/path/to/page): "Description of what the page covers"
+```
 
-1. **Find the right page** — fetch the docs index to locate the relevant page:
-   ```
-   WebFetch: https://docs.crewai.com/llms.txt
-   ```
-   This returns a sitemap of all doc pages with descriptions. Identify the URL most relevant to the user's question.
+Categories include:
+- **API Reference** — REST endpoints (kickoff, status, resume, inputs)
+- **Concepts** — agents, crews, tasks, tools, flows, memory, knowledge, LLMs, processes, training, testing
+- **Enterprise** — RBAC, SSO, automations, traces, deployment, triggers, integrations
+- **Tools Library** — 40+ tools organized by category (AI/ML, automation, cloud, database, files, search, web scraping)
+- **MCP Integration** — MCP server setup, transports, DSL, security
+- **Examples & Cookbooks** — practical implementations
+- **Learning Paths** — tutorials and advanced topics
+- **Observability** — monitoring integrations
 
-2. **Fetch the page** — retrieve the specific doc page content:
-   ```
-   WebFetch: https://docs.crewai.com/<path-from-index>
-   ```
+### Step 2: Fetch the relevant page
 
-3. **Synthesize the answer** — combine what you find with context from the other skills to give a clear, actionable response.
+Once you identify the right page from the index, fetch its content:
 
-4. **Cite the source** — include the docs URL so the user can read further.
+```
+WebFetch: https://docs.crewai.com/<path-from-index>
+```
 
-After using the fallback, suggest the user configure the MCP server for a better experience:
+### Step 3: Synthesize and cite
 
-> **Tip:** For faster docs lookups, add the CrewAI docs MCP server to your coding agent:
-> `https://docs.crewai.com/mcp`-->
+Combine what you find from the docs with context from the other skills to give a clear, actionable response. Always include the docs URL so the user can read further.
 
 ---
 
-## Setting Up the MCP Server (Recommended)
+## Workflow Summary
 
-For the best experience, configure the CrewAI documentation MCP server in your coding agent.
+1. **Understand the user's question** — what specific CrewAI concept, API, or behavior are they asking about?
+2. **Fetch `llms.txt`** — scan the index to find the most relevant page(s)
+3. **Fetch the page(s)** — retrieve the actual documentation content
+4. **Synthesize the answer** — combine docs content with context from other skills
+5. **Cite the source** — include the docs URL in your response
 
-**Server URL:**
+---
+
+## For an Even Better Experience
+
+Users who frequently query CrewAI docs can configure the CrewAI docs MCP server in their coding agent for richer, structured search:
+
 ```
 https://docs.crewai.com/mcp
 ```
 
-### Claude Code
-
-Add to `.claude/settings.json` (project-level) or `~/.claude/settings.json` (global):
-
-```json
-{
-  "mcpServers": {
-    "crewai-docs": {
-      "type": "url",
-      "url": "https://docs.crewai.com/mcp"
-    }
-  }
-}
-```
-
-### Cursor / Windsurf / Other Agents
-
-Add `https://docs.crewai.com/mcp` as a remote MCP server following your tool's MCP configuration docs.
-
----
-
-## Workflow
-
-1. **Understand the user's question** — what specific CrewAI concept, API, or behavior are they asking about?
-2. **Query the docs** — use the MCP tools if available, otherwise WebFetch the relevant page
-3. **Synthesize the answer** — combine what you find from the docs with context from the other skills to give a clear, actionable response
-4. **Cite the source** — mention which docs page the information came from so the user can read further
+This is optional — the `llms.txt` workflow above works without any setup.
 
 ---
 
@@ -107,6 +96,8 @@ Add `https://docs.crewai.com/mcp` as a remote MCP server following your tool's M
 | "How do I deploy a CrewAI flow to production?" | Deployment guidance lives in docs, not in design skills |
 | "What CLI commands does `crewai` support?" | CLI reference is a docs concern |
 | "How do I configure memory for a crew?" | Detailed config options beyond what design-agent covers |
+| "What tools are available for web scraping?" | Tools library reference |
+| "How do I set up SSO for CrewAI enterprise?" | Enterprise features live in docs |
 
 ---
 
@@ -115,4 +106,3 @@ Add `https://docs.crewai.com/mcp` as a remote MCP server following your tool's M
 - **getting-started** — project scaffolding, choosing abstractions, Flow architecture
 - **design-agent** — agent Role-Goal-Backstory, parameter tuning, tools, memory & knowledge
 - **design-task** — task descriptions, expected_output, guardrails, structured output, dependencies
-- **optimize-flow** — Flow latency optimization, parallelization, model tiering
