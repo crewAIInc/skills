@@ -19,7 +19,7 @@ Use this skill when:
 - The question is about a newer or less common CrewAI feature (e.g., telemetry, testing, CLI commands, deployment, enterprise features)
 - You're unsure whether your knowledge is current — the docs reflect the latest published state
 
-**Do NOT use this skill** when the question is clearly answered by one of the other skills (getting-started, design-agent, design-taskf). Those skills contain curated, opinionated guidance. This skill is for filling gaps and verifying details.
+**Do NOT use this skill** when the question is clearly answered by one of the other skills (getting-started, design-agent, design-task). Those skills contain curated, opinionated guidance. This skill is for filling gaps and verifying details.
 
 ---
 
