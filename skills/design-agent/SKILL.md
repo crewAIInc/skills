@@ -521,3 +521,4 @@ For related skills:
 
 - **getting-started** — project scaffolding, choosing the right abstraction, Flow architecture
 - **design-task** — task description/expected_output best practices, guardrails, structured output, dependencies
+- **ask-docs** — query the live CrewAI documentation MCP server for questions not covered by these skills

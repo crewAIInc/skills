@@ -695,3 +695,4 @@ For related skills:
 
 - **design-agent** — agent Role-Goal-Backstory framework, parameter tuning, tool assignment, memory & knowledge configuration
 - **design-task** — task description/expected_output best practices, guardrails, structured output, dependencies
+- **ask-docs** — query the live CrewAI documentation MCP server for questions not covered by these skills

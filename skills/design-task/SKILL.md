@@ -498,3 +498,4 @@ For related skills:
 
 - **getting-started** — project scaffolding, choosing the right abstraction, Flow architecture
 - **design-agent** — agent Role-Goal-Backstory framework, parameter tuning, tool assignment, memory & knowledge configuration
+- **ask-docs** — query the live CrewAI documentation MCP server for questions not covered by these skills
