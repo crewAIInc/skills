@@ -42,8 +42,19 @@ CrewAI task design and configuration. Covers writing effective descriptions and 
 
 ## Installation
 
-```bash
-npx skills add crewAIInc/skills
+In [Claude Code](https://docs.claude.com/en/docs/claude-code), add this marketplace and install the plugin:
+
+```
+/plugin marketplace add crewAIInc/skills
+/plugin install crewai-skills@crewai-plugins
+```
+
+The first command registers the marketplace from this repo's `.claude-plugin/marketplace.json`. The second installs the `crewai-skills` plugin from the `crewai-plugins` marketplace.
+
+To pin to a specific branch or tag:
+
+```
+/plugin marketplace add crewAIInc/skills
 ```
 
 ## Skill Structure
