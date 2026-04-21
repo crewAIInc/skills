@@ -13,7 +13,7 @@
       "description": "CrewAI development skills for Claude Code covering agent design, task configuration, structured output, and debugging common pitfalls",
       "version": "1.0.0",
       "strict": false,
-      "skills": "."
+      "skills": "./"
     }
   ]
 }
