@@ -15,6 +15,84 @@ How to design effective agents with the right role, goal, backstory, tools, and 
 
 ---
 
+## 0. How Many Agents Do You Actually Need?
+
+**Default to ONE agent.** Add more only when the task genuinely splits into work that requires:
+
+- **Different tools or permissions** — e.g. one agent has Slack write access, another reads docs only.
+- **Different personas the LLM must clearly switch between** — a writer's voice is not a researcher's voice.
+- **Different LLMs** — a cheap model for mechanical steps, a stronger one for synthesis.
+- **Different guardrails or output schemas** — separate agents make the contract per stage explicit.
+
+**DO NOT add an agent just because the workflow has multiple steps.** A single agent can:
+- Call multiple tools in sequence within one kickoff (search → scrape → summarize is one agent's loop).
+- Produce structured multi-section output in one response.
+- Iterate via its own tool-use loop without you orchestrating it as separate agents.
+
+**Cost calculus:** every extra agent = at least one more LLM kickoff plus a context handoff. Splitting linear, single-persona work into multiple agents multiplies token cost and adds fragility for marginal quality wins.
+
+### Anti-pattern: Sequential mechanical steps as separate agents
+
+❌ Three agents for what is one researcher's job:
+```python
+source_finder = Agent(role="Finds URLs via Firecrawl search", tools=[firecrawl_search])
+scraper       = Agent(role="Scrapes URLs via Firecrawl scrape", tools=[firecrawl_scrape])
+writer        = Agent(role="Writes the report", ...)
+```
+
+✅ One researcher does the gathering loop; one writer synthesizes — two agents because the personas and LLMs genuinely differ:
+```python
+researcher = Agent(role="Web Researcher", tools=[firecrawl_search, firecrawl_scrape], llm="anthropic/claude-haiku-4-5")
+writer     = Agent(role="Technical Report Writer",                                    llm="anthropic/claude-sonnet-4-6")
+```
+The researcher's task description tells it to search, then scrape, then return structured findings. One LLM loop, multiple tool calls.
+
+### Anti-pattern: "Summarize then send" as two agents
+
+❌ Two agents to read a string, summarize it, and post a Slack DM:
+```python
+summarizer       = Agent(role="Summarizer")
+slack_messenger  = Agent(role="Slack Sender", apps=["slack"])
+```
+
+✅ One agent with the connector and a task that tells it to summarize on top, then DM:
+```python
+slack_dm_agent = Agent(
+    role="Slack Reporter",
+    goal="Post a Slack DM containing a one-paragraph summary plus the full markdown body.",
+    apps=["slack"],
+)
+# Task: "Read the report below. Write a 2-3 sentence executive summary at the top.
+#        Post a DM to {recipient_email} with the summary followed by the full body."
+```
+
+### Heuristic
+
+> If two "agents" share the same persona, the same tool surface, and the same LLM, they are one agent with a longer task description.
+
+### Once you've decided "one agent is enough"
+
+Use `Agent.kickoff()` directly inside a Flow method — no `Crew`, no `Task` ceremony. The Flow owns sequencing and state; each step is a single agent kickoff. See **Section 4 — Agent.kickoff() — Direct Agent Execution** below for the full pattern, and the upstream docs at <https://docs.crewai.com/en/concepts/agents#direct-agent-interaction-with-kickoff>.
+
+Quick shape:
+
+```python
+@listen(previous_step)
+def my_step(self):
+    agent = Agent(role="…", goal="…", backstory="…", tools=[...])
+    result = agent.kickoff(
+        messages=f"Use this prior step's output: {self.state.prior_field}",
+        response_format=MyPydanticModel,  # optional
+    )
+    self.state.my_field = result.pydantic  # or result.raw
+```
+
+Reach for `Crew.kickoff()` *only* when a step genuinely benefits from multi-agent collaboration (delegation, hierarchical management, parallel specialists feeding one synthesis). For "one agent does one job", `Agent.kickoff()` inside a Flow listener is the right primitive.
+
+Only after you've decided multi-agent is justified, read on for how to design each one.
+
+---
+
 ## 1. The Role-Goal-Backstory Framework
 
 Every agent needs three things: **who** it is, **what** it wants, and **why** it's qualified.
@@ -143,21 +221,77 @@ Set `allow_delegation=True` only when:
 
 **Warning:** Delegation without clear task boundaries leads to infinite loops or wasted iterations.
 
-### Planning (Reasoning Before Acting)
+### Planning (Plan-and-Execute Mode)
+
+When a `PlanningConfig` is set on an agent, `Agent.kickoff()` (and `Agent.execute_task()`) routes through the new `crewai.experimental.AgentExecutor`. Instead of a single ReAct-style loop, the agent:
+
+1. **Generates a plan** — a list of `PlanStep`s, each with a description and optional `tool_to_use`. Stored as `state.todos`.
+2. **Executes each step** via a `StepExecutor` in an isolated multi-turn LLM loop (capped by `max_step_iterations`).
+3. **Observes the result** via a `PlannerObserver` after every step — did the step succeed? Is the remaining plan still valid?
+4. **Routes the next action** based on the agent's `reasoning_effort` setting (see below).
+
+The presence of a `PlanningConfig` enables the mode. To disable: don't pass one, or set `planning=False`.
 
 ```python
-from crewai.agents.agent_builder.base_agent import PlanningConfig
+from crewai import Agent
+from crewai.agent.planning_config import PlanningConfig
 
-Agent(
-    ...,
-    planning=True,                    # Enable plan-then-execute (default: False)
-    planning_config=PlanningConfig(
-        max_attempts=3,               # Max planning iterations
-    ),
+agent = Agent(
+    role="…",
+    goal="…",
+    backstory="…",
+    tools=[...],
+    planning_config=PlanningConfig(reasoning_effort="medium"),  # most common
 )
 ```
 
-Use planning for complex tasks where the agent benefits from thinking through its approach before taking action. Skip it for simple, well-defined tasks.
+#### `reasoning_effort` — pick one
+
+| Level | After each step the planner... | Pick when |
+|---|---|---|
+| `"low"` | observes (validates success), marks the todo complete, continues. **No replan, no refine.** | You want plan visibility (todos, observations) but trust the agent to follow it linearly. Fastest. |
+| `"medium"` (default) | observes; **replans on failure only**. Successful steps just continue. | The agent's tools can fail (network, exec, scrape) and you want graceful recovery without paying refinement cost on every success. **The right default for sandbox-coding, research, and other tool-heavy loops.** |
+| `"high"` | observes, then routes through `decide_next_action` which can trigger early goal achievement, full replan, or lightweight refinement after every step. | The task changes shape based on intermediate findings, or you need maximum adaptiveness. Most LLM calls per run. |
+
+Source: `crewai/experimental/agent_executor.py:450` (`observe_step_result` router) and `crewai/agent/planning_config.py`.
+
+#### Other `PlanningConfig` knobs
+
+```python
+PlanningConfig(
+    reasoning_effort="medium",
+    max_steps=20,            # cap on planned steps (default 20)
+    max_replans=3,           # max full re-plans before finalizing (default 3)
+    max_attempts=None,       # planning refinement attempts during plan generation
+    max_step_iterations=15,  # max LLM turns per step's StepExecutor (default 15)
+    step_timeout=None,       # wall-clock seconds per step; None = no cap
+    system_prompt=None,      # custom planning system prompt (uses default if None)
+    plan_prompt=None,        # custom initial-plan prompt; placeholders: {description}, {expected_output}, {tools}, {max_steps}
+    refine_prompt=None,      # custom refinement prompt
+    llm=None,                # separate LLM for planning (else uses agent.llm)
+)
+```
+
+Use `llm="anthropic/claude-haiku-4-5"` (cheap) for the planner while keeping `agent.llm="anthropic/claude-opus-4-7"` (strong) for execution — common cost optimization.
+
+#### When to enable
+
+- **Enable** for autonomous loops where the agent picks its own steps and you want failure recovery (e.g. coding agent that writes → runs → patches; research agent that searches → scrapes → revises).
+- **Skip** for single-tool, single-purpose calls (e.g. "summarize this string", "post this Slack DM") — observation overhead doesn't pay off.
+
+#### Cost shape
+
+Every step gets a `PlannerObserver` LLM call (~1 extra call per step). On `"medium"` a failed step adds a replan call. On `"high"` every step adds a `decide_next_action` call too. For an N-step plan, expect roughly:
+
+- `low`: N execution + N observation = **2N calls**
+- `medium`: 2N + (failures × 1 replan)
+- `high`: ~3N + replans/refines
+
+Material at scale — measure before defaulting `high` for everything.
+
+#### Custom `plan_prompt`
+
+If you supply `plan_prompt`, include the placeholders the planner template expects: `{description}`, `{expected_output}`, `{tools}`, `{max_steps}`. The planner LLM gets these interpolated. Keep custom prompts focused on *project-specific* rules; let `description`/`tools` (auto-injected) carry the dynamic content.
 
 ### Code Execution
 
@@ -409,7 +543,9 @@ print(flow.state.report)
 
 ## 5. Specialist vs Generalist Agents
 
-**Always prefer specialists.** An agent that does one thing well outperforms one that does many things acceptably.
+> **Note:** Apply this section *after* you've decided you genuinely need multiple agents (see Section 0). If you only need one agent, "specialist vs generalist" is not the question — the question is just how to design that one agent.
+
+**When you do need multiple agents, prefer specialists.** An agent that does one thing well outperforms one that does many things acceptably.
 
 ### When to Use a Specialist
 
