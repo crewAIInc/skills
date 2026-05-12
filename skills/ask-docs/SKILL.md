@@ -1,11 +1,11 @@
 ---
 name: ask-docs
-description: "Query the official CrewAI documentation for answers. Use when the user has a CrewAI question that isn't fully covered by the getting-started, design-agent, design-task skills — e.g., specific API details, configuration options, advanced features, troubleshooting errors, enterprise features, tool references, or anything where the latest docs are the best source of truth."
+description: "Looks up answers in the official CrewAI docs at docs.crewai.com. Use when the user asks a CrewAI question that needs authoritative current docs — specific API details, method signatures, CLI commands, enterprise features, the built-in tools/MCP catalog, deployment, telemetry, or an unfamiliar error message. Fills gaps left by getting-started, design-agent, and design-task, and verifies knowledge against the latest published docs."
 ---
 
 # Ask CrewAI Docs
 
-Answer CrewAI questions by looking up the official documentation at `docs.crewai.com`.
+Answer CrewAI questions by querying the official documentation at `docs.crewai.com`.
 
 ---
 
@@ -25,79 +25,103 @@ Use this skill when:
 
 ## How to Query the Docs
 
-### Step 1: Fetch the docs index
+CrewAI publishes a live MCP server for its docs at `https://docs.crewai.com/mcp`. **Prefer the MCP path** when it's available — it returns structured, search-ranked results without burning context on full-page fetches. Fall back to direct `WebFetch` only when the MCP server isn't registered.
 
-The CrewAI docs site publishes an `llms.txt` file — a structured index of every documentation page with descriptions. Fetch it first to find the right page:
+### Path A — MCP server (preferred)
+
+The CrewAI docs MCP server exposes two tools. In Claude Code they appear under whatever name the user gave the server (commonly `crewai-docs`), so the fully-qualified names look like `mcp__crewai-docs__search_crew_ai`. Adjust the prefix to match the user's MCP config.
+
+**Tool 1: `search_crew_ai`** — broad semantic search across the knowledge base.
+
+| Parameter | Required | Purpose |
+|---|---|---|
+| `query` | yes | Natural-language question |
+| `version` | no | Pin to a docs version |
+| `language` | no | Pin to a language |
+
+Use for conceptual questions: *"how does CrewAI memory work?"*, *"what guardrails are available for tasks?"*, *"difference between sequential and hierarchical processes?"*
+
+**Tool 2: `query_docs_filesystem_crew_ai`** — read-only filesystem queries against the docs sandbox.
+
+| Parameter | Required | Purpose |
+|---|---|---|
+| `command` | yes | A shell-style command — supports `ripgrep`, `grep`, `find`, `tree`, `ls`, `cat`, `head`, `tail`, and text utilities |
+
+Use for exact-match work: locating every page that mentions a specific symbol, reading a full page by path, or enumerating sections of the docs tree.
+
+**When to use which:**
+- Reach for `search_crew_ai` first for almost everything — it's the right default.
+- Switch to `query_docs_filesystem_crew_ai` when you need an exact identifier (`max_iter`, `output_pydantic`), a specific file path, or a structural view of the docs.
+
+#### Checking if the MCP server is registered
+
+Look for tool names matching `mcp__*__search_crew_ai` in the available tool list. If none appear, the user hasn't registered the server — fall through to Path B and optionally suggest they add it (see the bottom of this file).
+
+### Path B — WebFetch fallback
+
+If the MCP server isn't available, use the published `llms.txt` index plus targeted page fetches.
+
+**Step 1: Fetch the docs index**
 
 ```
 WebFetch: https://docs.crewai.com/llms.txt
 ```
 
-This returns a categorized list of all doc pages in the format:
+This returns a categorized list of every doc page:
 
 ```
 - [Page Title](https://docs.crewai.com/path/to/page): "Description of what the page covers"
 ```
 
-Categories include:
-- **API Reference** — REST endpoints (kickoff, status, resume, inputs)
-- **Concepts** — agents, crews, tasks, tools, flows, memory, knowledge, LLMs, processes, training, testing
-- **Enterprise** — RBAC, SSO, automations, traces, deployment, triggers, integrations
-- **Tools Library** — 40+ tools organized by category (AI/ML, automation, cloud, database, files, search, web scraping)
-- **MCP Integration** — MCP server setup, transports, DSL, security
-- **Examples & Cookbooks** — practical implementations
-- **Learning Paths** — tutorials and advanced topics
-- **Observability** — monitoring integrations
+Categories include API Reference, Concepts, Enterprise, Tools Library, MCP Integration, Examples & Cookbooks, Learning Paths, and Observability.
 
-### Step 2: Fetch the relevant page
-
-Once you identify the right page from the index, fetch its content:
+**Step 2: Fetch the relevant page**
 
 ```
 WebFetch: https://docs.crewai.com/<path-from-index>
 ```
 
-### Step 3: Synthesize and cite
+**Step 3: Synthesize and cite**
 
-Combine what you find from the docs with context from the other skills to give a clear, actionable response. Always include the docs URL so the user can read further.
+Combine the docs content with context from the other skills. Always include the docs URL so the user can read further.
 
 ---
 
 ## Workflow Summary
 
-1. **Understand the user's question** — what specific CrewAI concept, API, or behavior are they asking about?
-2. **Fetch `llms.txt`** — scan the index to find the most relevant page(s)
-3. **Fetch the page(s)** — retrieve the actual documentation content
-4. **Synthesize the answer** — combine docs content with context from other skills
-5. **Cite the source** — include the docs URL in your response
-
----
-
-## For an Even Better Experience
-
-Users who frequently query CrewAI docs can configure the CrewAI docs MCP server in their coding agent for richer, structured search:
-
-```
-https://docs.crewai.com/mcp
-```
-
-This is optional — the `llms.txt` workflow above works without any setup.
+1. **Understand the question** — what specific CrewAI concept, API, or behavior is the user asking about?
+2. **Pick a path** — MCP if `mcp__*__search_crew_ai` is available, otherwise WebFetch.
+3. **Query** — `search_crew_ai` for conceptual, `query_docs_filesystem_crew_ai` for exact / structural, `llms.txt` + page fetch on the fallback path.
+4. **Synthesize** — combine the result with context from the other skills.
+5. **Cite** — include the docs URL in your response so the user can read further.
 
 ---
 
 ## Examples of Good Use Cases
 
-| User Question | Why This Skill |
-|---|---|
-| "What parameters does `Crew()` accept?" | Specific API reference — docs are authoritative |
-| "How do I set up telemetry in CrewAI?" | Niche feature not covered in other skills |
-| "What's the difference between `Process.sequential` and `Process.hierarchical`?" | Detailed comparison best sourced from docs |
-| "I'm getting `ValidationError` when using `output_pydantic`" | Troubleshooting — docs may have known issues or caveats |
-| "How do I deploy a CrewAI flow to production?" | Deployment guidance lives in docs, not in design skills |
-| "What CLI commands does `crewai` support?" | CLI reference is a docs concern |
-| "How do I configure memory for a crew?" | Detailed config options beyond what design-agent covers |
-| "What tools are available for web scraping?" | Tools library reference |
-| "How do I set up SSO for CrewAI enterprise?" | Enterprise features live in docs |
+| User Question | Best Tool | Why |
+|---|---|---|
+| "What parameters does `Crew()` accept?" | `query_docs_filesystem_crew_ai` (grep for `Crew(`) | Exact symbol lookup |
+| "How does CrewAI memory work?" | `search_crew_ai` | Conceptual / broad |
+| "What's the difference between `Process.sequential` and `Process.hierarchical`?" | `search_crew_ai` | Comparison question |
+| "I'm getting `ValidationError` when using `output_pydantic`" | `query_docs_filesystem_crew_ai` (grep error string) | Error-message lookup |
+| "How do I deploy a CrewAI flow to production?" | `search_crew_ai` | Workflow / deployment guide |
+| "What CLI commands does `crewai` support?" | `search_crew_ai` | CLI reference page |
+| "How do I configure memory for a crew?" | `search_crew_ai` | Detailed config beyond design-agent |
+| "What tools are available for web scraping?" | `search_crew_ai` | Tools library catalog |
+| "How do I set up SSO for CrewAI enterprise?" | `search_crew_ai` | Enterprise docs |
+
+---
+
+## Suggesting the MCP server to users
+
+If you fall back to Path B repeatedly for the same user, mention once that they can register the CrewAI docs MCP server for faster, richer search:
+
+```
+https://docs.crewai.com/mcp
+```
+
+Don't push this — Path B works fine without it.
 
 ---
 

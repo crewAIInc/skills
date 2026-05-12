@@ -1,6 +1,6 @@
 ---
 name: design-task
-description: "CrewAI task design and configuration. Use when creating, configuring, or debugging crewAI tasks — writing descriptions and expected_output, setting up task dependencies with context, configuring output formats (output_pydantic, output_json, output_file), using guardrails for validation, enabling human_input, async execution, markdown formatting, or debugging task execution issues."
+description: "Designs and tunes individual CrewAI tasks. Use when creating, configuring, or debugging a crewAI Task in tasks.yaml or Python — writing task description and expected_output, chaining tasks with context, structuring output via output_pydantic / output_json / output_file, adding guardrails or human_input, running tasks async, or fixing a task that returns the wrong shape or skips steps. Do NOT use for agent-level config (use design-agent) or project scaffolding (use getting-started)."
 ---
 
 # CrewAI Task Design Guide
