@@ -1,6 +1,6 @@
 ---
 name: design-agent
-description: "CrewAI agent design and configuration. Use when creating, configuring, or debugging crewAI agents — choosing role/goal/backstory, selecting LLMs, assigning tools, tuning max_iter/max_rpm/max_execution_time, enabling planning/code execution/delegation, setting up knowledge sources, using guardrails, or configuring agents in YAML vs code."
+description: "Designs and tunes individual CrewAI agents. Use when creating, configuring, or debugging a crewAI Agent in agents.yaml or Python — writing role/goal/backstory, picking an LLM, assigning tools, tuning max_iter / max_rpm / max_execution_time, enabling planning, code execution, or delegation, wiring knowledge sources, or fixing an agent that loops, hallucinates, or ignores its tools. Do NOT use for task-level config (use design-task) or project scaffolding (use getting-started)."
 ---
 
 # CrewAI Agent Design Guide

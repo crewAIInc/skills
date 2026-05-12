@@ -1,6 +1,6 @@
 ---
 name: getting-started
-description: "CrewAI architecture decisions and project scaffolding. Use when starting a new crewAI project, choosing between LLM.call() vs Agent.kickoff() vs Crew.kickoff() vs Flow, scaffolding with 'crewai create flow', setting up YAML config (agents.yaml, tasks.yaml), wiring @CrewBase crew.py, writing Flow main.py with @start/@listen, or using {variable} interpolation."
+description: "Scaffolds new CrewAI projects and picks the right abstraction level. Use when starting a CrewAI project from scratch, deciding between LLM.call() vs Agent.kickoff() vs Crew.kickoff() vs Flow, running 'crewai create flow', or wiring up agents.yaml, tasks.yaml, crew.py, or main.py with @start/@listen and {variable} interpolation. Do NOT use for tuning an existing agent (use design-agent) or task (use design-task)."
 ---
 
 # CrewAI Getting Started & Architecture
