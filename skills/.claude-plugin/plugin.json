@@ -1,0 +1,11 @@
+{
+  "name": "crewai-skills",
+  "version": "1.0.0",
+  "description": "CrewAI development skills for Claude Code covering agent design, task configuration, structured output, and debugging common pitfalls",
+  "skills": [
+    "./getting-started",
+    "./design-agent",
+    "./ask-docs",
+    "./design-task"
+  ]
+}
