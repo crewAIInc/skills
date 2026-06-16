@@ -204,6 +204,8 @@ Task(
 
 When enabled, the agent presents its result and waits for human feedback before marking the task complete. Use for critical outputs that need human approval.
 
+**Do not use `human_input=True` or Flow `@human_feedback` to model normal follow-up chat.** In conversational Flows, the next user line should be another `flow.handle_turn(message, session_id=...)` call. Human review is for approving or correcting a specific task/step output before it moves downstream.
+
 ### Markdown Formatting
 
 ```python
@@ -462,6 +464,7 @@ crew.kickoff(inputs={
 | Vague description ("Research the topic") | Agent produces shallow, unfocused output | Add specific steps, constraints, and context |
 | Vague expected_output ("A report") | Agent guesses at format and structure | Specify format, sections, length, quality markers |
 | Multiple objectives in one task | Agent does all of them poorly | Split into focused single-purpose tasks |
+| Modeling each chat turn as a Crew task | Tasks are batch/workflow units, not the conversational session loop | Use a conversational Flow and call `handle_turn()` per user message |
 | No context between dependent tasks | Agent lacks information from prior steps | Use `context=[prior_task]` for explicit dependencies |
 | `expected_output` references a Pydantic class | Agent sees a class name string, not field names | Keep `expected_output` as a human-readable string; use `output_pydantic` for the model |
 | Missing tools for data tasks | Agent fabricates data instead of fetching it | Add tools to the task or agent |

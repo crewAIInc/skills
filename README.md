@@ -6,7 +6,7 @@ A collection of skills for AI coding agents that teach best practices for buildi
 
 ### getting-started
 
-CrewAI architecture decisions and project scaffolding. Covers choosing the right abstraction (`LLM.call()` vs `Agent.kickoff()` vs `Crew.kickoff()` vs `Flow`), CLI scaffolding, YAML configuration, wiring `@CrewBase` crews, writing Flows with `@start`/`@listen`, and variable interpolation.
+CrewAI architecture decisions and project scaffolding. Covers choosing the right abstraction (`LLM.call()` vs `Agent.kickoff()` vs `Crew.kickoff()` vs `Flow`), CLI scaffolding, YAML configuration, wiring `@CrewBase` crews, writing Flows with `@start`/`@listen`, conversational Flows with `handle_turn()`, and variable interpolation.
 
 **Use when:**
 - Starting a new CrewAI project
@@ -14,6 +14,7 @@ CrewAI architecture decisions and project scaffolding. Covers choosing the right
 - Scaffolding with `crewai create flow`
 - Setting up agents.yaml and tasks.yaml
 - Wiring crew.py or main.py
+- Building experimental conversational Flows
 - Debugging common setup issues
 
 ### design-agent
