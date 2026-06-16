@@ -108,10 +108,7 @@ Handlers should call `append_assistant_message(reply)` when they create a user-v
 Attach chat defaults as a class decorator:
 
 ```python
-@ConversationConfig(
-    llm="openai/gpt-4o-mini",
-    defer_trace_finalization=True,
-)
+@ConversationConfig(defer_trace_finalization=True)
 class SupportFlow(Flow[ConversationState]):
     conversational = True
 ```
@@ -147,6 +144,7 @@ Use `RouterConfig` for LLM-driven routing:
 ```python
 from typing import Literal
 from pydantic import BaseModel
+from crewai import LLM
 from crewai.experimental.conversational import RouterConfig
 
 
@@ -154,10 +152,13 @@ class RouteChoice(BaseModel):
     intent: Literal["CREWAI_DOCS", "RESEARCH", "converse"]
 
 
+router_llm = LLM(model="openai/gpt-4o-mini")
+
+
 @ConversationConfig(
     router=RouterConfig(
         response_format=RouteChoice,
-        llm="openai/gpt-4o-mini",
+        llm=router_llm,
         default_intent="converse",
         fallback_intent="converse",
     )

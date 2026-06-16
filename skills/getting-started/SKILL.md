@@ -591,7 +591,7 @@ Core model:
 ```python
 from uuid import uuid4
 
-from crewai import Flow
+from crewai import Agent, Flow
 from crewai.flow import listen
 from crewai.experimental.conversational import (
     ConversationConfig,
@@ -602,6 +602,14 @@ from crewai.experimental.conversational import (
 @ConversationConfig(defer_trace_finalization=True)
 class SupportFlow(Flow[ConversationState]):
     conversational = True
+
+    def research_agent(self) -> Agent:
+        return Agent(
+            role="Support Research Specialist",
+            goal="Answer the user's current research question with accurate sources.",
+            backstory="You are precise, evidence-driven, and explicit about uncertainty.",
+            tools=[...],
+        )
 
     def route_turn(self, context):
         message = (self.state.current_user_message or "").lower()
