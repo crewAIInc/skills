@@ -539,6 +539,46 @@ print(flow.state.report)
 - Use `Agent.kickoff()` when each step is a distinct agent and the Flow controls sequencing
 - Use `Crew.kickoff()` when multiple agents need to collaborate on related tasks within a single step
 
+### Agent.kickoff() in Conversational Flow Routes
+
+In experimental conversational Flows, the Flow owns the chat lifecycle and route selection. Agents should be called inside route handlers for bounded tool-backed work: research, docs lookup, account actions, triage, drafting, or escalation prep.
+
+```python
+from crewai import Agent, Flow
+from crewai.flow import listen
+from crewai.experimental.conversational import ConversationState
+
+
+class SupportFlow(Flow[ConversationState]):
+    conversational = True
+
+    def research_agent(self) -> Agent:
+        return Agent(
+            role="Support Research Specialist",
+            goal="Find accurate information with sources for the user's current question.",
+            backstory="You are precise, evidence-driven, and explicit about uncertainty.",
+            tools=[...],
+        )
+
+    @listen("RESEARCH")
+    def handle_research(self) -> str:
+        """Fresh research, current lookups, and source-backed synthesis."""
+        result = self.research_agent().kickoff(self.state.current_user_message)
+        self.append_agent_result("research_agent", result, visibility="private")
+        reply = result.raw
+        self.append_assistant_message(reply)
+        return reply
+```
+
+Design implications:
+- Keep the conversational `Flow` responsible for session id, message history, routing, trace finalization, and approvals.
+- Keep each agent narrow: one route, one tool surface, one job.
+- Use `append_agent_result(..., visibility="private")` for scratch work that should not enter canonical chat history.
+- Use `append_assistant_message(reply)` for the user-visible answer so the next turn has the assistant context.
+- Do not make a "chat agent" with every tool. Route first, then invoke a focused agent for the selected route.
+
+See the getting-started reference for the Flow lifecycle: `skills/getting-started/references/conversational-flows.md`.
+
 ---
 
 ## 5. Specialist vs Generalist Agents

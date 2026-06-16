@@ -17,6 +17,7 @@ Use this skill when:
 - You need to verify current API syntax, method signatures, or configuration options
 - The user hits an error and needs troubleshooting guidance from official docs
 - The question is about a newer or less common CrewAI feature (e.g., telemetry, testing, CLI commands, deployment, enterprise features)
+- The question is about experimental conversational Flows and you need the current `handle_turn()`, `ConversationConfig`, `RouterConfig`, tracing, or streaming behavior
 - You're unsure whether your knowledge is current — the docs reflect the latest published state
 
 **Do NOT use this skill** when the question is clearly answered by one of the other skills (getting-started, design-agent, design-task). Those skills contain curated, opinionated guidance. This skill is for filling gaps and verifying details.
@@ -48,6 +49,14 @@ Categories include:
 - **Examples & Cookbooks** — practical implementations
 - **Learning Paths** — tutorials and advanced topics
 - **Observability** — monitoring integrations
+
+For conversational Flow questions, go directly to:
+
+```
+WebFetch: https://docs.crewai.com/en/guides/flows/conversational-flows
+```
+
+Treat this page as the source of truth for the experimental `crewai.experimental.conversational` surface. Verify it before answering detailed API questions because the feature may change before it graduates.
 
 ### Step 2: Fetch the relevant page
 
@@ -98,6 +107,7 @@ This is optional — the `llms.txt` workflow above works without any setup.
 | "How do I configure memory for a crew?" | Detailed config options beyond what design-agent covers |
 | "What tools are available for web scraping?" | Tools library reference |
 | "How do I set up SSO for CrewAI enterprise?" | Enterprise features live in docs |
+| "How do I build a chat app with Flow.handle_turn()?" | Experimental conversational Flow API; verify the latest guide |
 
 ---
 

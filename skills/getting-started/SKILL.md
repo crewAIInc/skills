@@ -1,6 +1,6 @@
 ---
 name: getting-started
-description: "CrewAI architecture decisions and project scaffolding. Use when starting a new crewAI project, choosing between LLM.call() vs Agent.kickoff() vs Crew.kickoff() vs Flow, scaffolding with 'crewai create flow', setting up YAML config (agents.yaml, tasks.yaml), wiring @CrewBase crew.py, writing Flow main.py with @start/@listen, or using {variable} interpolation."
+description: "CrewAI architecture decisions and project scaffolding. Use when starting a new crewAI project, choosing between LLM.call() vs Agent.kickoff() vs Crew.kickoff() vs Flow, scaffolding with 'crewai create flow', setting up YAML config (agents.yaml, tasks.yaml), wiring @CrewBase crew.py, writing Flow main.py with @start/@listen, building experimental conversational Flows with handle_turn()/chat(), or using {variable} interpolation."
 ---
 
 # CrewAI Getting Started & Architecture
@@ -30,7 +30,7 @@ This is **not optional**. Even if you only need one crew, even if you know the f
 
 ## 1. Choosing the Right Abstraction
 
-crewAI has four levels of abstraction. Pick the simplest one that fits your need:
+crewAI has five common abstraction choices. Pick the simplest one that fits your need:
 
 | Level | When to Use | Overhead | Example |
 |---|---|---|---|
@@ -38,6 +38,7 @@ crewAI has four levels of abstraction. Pick the simplest one that fits your need
 | `Agent.kickoff()` | One agent with tools and reasoning, no multi-agent coordination | Low | Research a topic with web search |
 | `Crew.kickoff()` | Multiple agents collaborating on related tasks | Medium | Research + write + review pipeline |
 | `Flow` wrapping crews/agents/LLM calls | Production app with state, routing, conditionals, error handling | Full | Multi-step workflow with branching logic |
+| Conversational `Flow` | Multi-turn chat where each user line re-runs a Flow with the same session id | Full + experimental | Support assistant with routed chat, research, and escalation turns |
 
 ### Decision Flowchart
 
@@ -51,9 +52,14 @@ Do you need tools or multi-step reasoning?
             └── Do you need state management, routing, or multiple crews?
                 ├── No  → Crew (but still scaffold as a Flow for future-proofing)
                 └── Yes → Flow + Crew(s)
+
+Do users send multiple chat messages in one session?
+└── Yes → Conversational Flow with handle_turn(message, session_id=...)
 ```
 
 **Rule of thumb:** For any production application, **always start with a Flow**. You can embed `LLM.call()`, `Agent.kickoff()`, or `Crew.kickoff()` inside Flow steps. This gives you state management, error handling, and room to grow.
+
+For chat applications, start with a conversational `Flow` rather than trying to make `Crew.kickoff()` or `Flow.kickoff()` act like a chat loop. The conversational surface is experimental, but it is the intended API for multi-turn sessions: call `flow.handle_turn(message, session_id=...)` for every user line, or `flow.chat()` for a local terminal REPL. Official guide: <https://docs.crewai.com/en/guides/flows/conversational-flows>.
 
 ---
 
@@ -570,6 +576,71 @@ class LongRunningFlow(Flow[MyState]):
         ...
 ```
 
+### Conversational Flows with `handle_turn()` (Experimental)
+
+Use a conversational `Flow` when the product is a chat session: support assistants, routed research helpers, onboarding wizards, or any UI where the same user sends multiple turns.
+
+Core model:
+- Each user message is a **new Flow run** with the **same session id**
+- `handle_turn(message, session_id=...)` appends the user line to `state.messages`, resets per-turn execution tracking, and calls `kickoff(inputs={"id": session_id})` internally
+- `Flow.kickoff()` does **not** accept `user_message=` or `session_id=` keyword args
+- Route chat turns with `route_turn()` plus `@listen("ROUTE")` handlers
+- Call `append_assistant_message(reply)` in handlers so the next turn sees assistant history
+- Wrap owned loops in `try/finally` and call `finalize_session_traces()`; `flow.chat()` does this for local REPLs
+
+```python
+from uuid import uuid4
+
+from crewai import Flow
+from crewai.flow import listen
+from crewai.experimental.conversational import (
+    ConversationConfig,
+    ConversationState,
+)
+
+
+@ConversationConfig(defer_trace_finalization=True)
+class SupportFlow(Flow[ConversationState]):
+    conversational = True
+
+    def route_turn(self, context):
+        message = (self.state.current_user_message or "").lower()
+        if "docs" in message or "crewai" in message:
+            return "CREWAI_DOCS"
+        if "research" in message or "search" in message:
+            return "RESEARCH"
+        return "converse"
+
+    @listen("CREWAI_DOCS")
+    def handle_docs(self):
+        """Look up CrewAI documentation for framework/API questions."""
+        reply = "I would query the CrewAI docs here."
+        self.append_assistant_message(reply)
+        return reply
+
+    @listen("RESEARCH")
+    def handle_research(self):
+        """Fresh research, current lookups, and tool-backed investigation."""
+        result = self.research_agent().kickoff(self.state.current_user_message)
+        reply = result.raw
+        self.append_assistant_message(reply)
+        return reply
+
+
+flow = SupportFlow()
+session_id = str(uuid4())
+
+try:
+    flow.handle_turn("What can you do?", session_id=session_id)
+    flow.handle_turn("Check the CrewAI docs for flows.", session_id=session_id)
+finally:
+    flow.finalize_session_traces()
+```
+
+Use `RouterConfig` when you want LLM-driven routing. The router catalog is auto-built from `@listen("ROUTE")` handlers and their docstrings, so do not duplicate the route list in the router prompt.
+
+See [Conversational Flows](references/conversational-flows.md) for the full lifecycle, routing, persistence, and trace guidance.
+
 ### Human-in-the-Loop with `@human_feedback`
 
 ```python
@@ -680,6 +751,10 @@ uv run src/my_project/main.py
 | Agent loops to `max_iter` without finishing | Task description too vague or conflicting with `expected_output` | Make `expected_output` specific and achievable; lower `max_iter` to fail faster |
 | Flow state not updating across steps | Using unstructured state without proper key access | Switch to structured Pydantic state or ensure dict keys are consistent |
 | `@router` return value ignored | Method not decorated with `@router` | Use `@router(condition)` not `@listen(condition)` for branching methods |
+| `Flow.kickoff(user_message=..., session_id=...)` fails | Conversational kwargs are not accepted by `kickoff()` | Use `flow.handle_turn(message, session_id=...)` for chat messages |
+| Chat history missing assistant replies | Handler returned text but did not record it on older/explicit paths | Call `self.append_assistant_message(reply)` inside route handlers |
+| Trace never exports for chat session | Deferred conversational trace was not finalized | Call `flow.finalize_session_traces()` in `finally`, or use `flow.chat()` |
+| Follow-up chat modeled with `@human_feedback` | Human feedback approves a step output, not the next user message | Use conversational `handle_turn()` for follow-up chat lines |
 
 ---
 
@@ -688,6 +763,7 @@ uv run src/my_project/main.py
 For deeper dives into specific topics, see:
 
 - [Flow Routing, Persistence, Streaming & Human Feedback](references/flow-routing.md) — complete `@router`, `or_()`, `and_()`, `@persist`, streaming, and `@human_feedback` patterns
+- [Conversational Flows](references/conversational-flows.md) — experimental multi-turn Flow API with `handle_turn()`, `chat()`, `ConversationConfig`, router behavior, persistence, and tracing
 - [MCP Servers](references/mcp-servers.md) — prefer official MCP servers over native tools; setup, DSL integration, and known official servers
 - [Tools Catalog](references/tools-catalog.md) — all 80+ built-in tools with imports, env vars, and common combos (use as fallback when no MCP server exists)
 
