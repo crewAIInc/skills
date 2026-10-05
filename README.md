@@ -104,6 +104,25 @@ Calling a deployed crew or flow over HTTP: the token and URL, `GET /inputs`, `PO
 - A kickoff returns `422 "Missing inputs: ..."`, or a status poll never ends or says `NOT FOUND`
 - One run's prompt shows another run's data
 
+## Example prompts
+
+Each skill loads on its own when a request matches its description. These prompts each triggered the intended skill in a fresh install:
+
+| Skill | Try asking |
+|---|---|
+| `getting-started` | "I'm new to CrewAI. Help me set up my first project from scratch - install, create a crew, and run it locally." |
+| `design-agent` | "I'm writing the role, goal and backstory for a CrewAI research analyst agent and it keeps going off-topic and looping. How should I write these fields and which agent settings should I set?" |
+| `design-task` | "How should I write the description and expected_output for a CrewAI task so the output comes back as a validated Pydantic object, and should I use context to pass the previous task's result?" |
+| `ask-docs` | "Where in the official CrewAI docs is the reference for the Crew class planning parameter, and is there an llms.txt I can point my editor at?" |
+| `check-crewai-api` | "My crew.py fails with: ImportError: cannot import name 'BaseTool' from 'crewai_tools'. Also I set memory_config on the Crew. What is wrong?" |
+| `build-flow` | "My Flow listener decorated @listen('summarize') on a method named summarize raises 'listen condition references the handler name'. How do I fix the router wiring?" |
+| `connect-tools-and-mcp` | "I passed mcps=['https://mcp.example.com/mcp'] to my Agent; the stdio version worked locally but after deploy the agent never calls the MCP tool. Why?" |
+| `test-crewai-project` | "How do I write pytest tests for my crew in CI without an OpenAI key? I keep getting ValueError: OPENAI_API_KEY is required." |
+| `deploy-to-amp` | "crewai deploy push says Online but the deployment still runs my old code. What does push actually upload?" |
+| `call-deployed-crew` | "I'm calling my deployed crew's /kickoff endpoint with {'topic': 'AI'} and get 422. What should the body be and how do I poll the result?" |
+
+Every skill names the crewai release it was verified against. If `crewai version` reports a different major or minor version, the skill tells the assistant to re-check version-sensitive details with `ask-docs`.
+
 ## Installation
 
 In [Claude Code](https://docs.claude.com/en/docs/claude-code), add this marketplace and install the plugin:
