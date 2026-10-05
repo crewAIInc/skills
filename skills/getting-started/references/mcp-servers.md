@@ -234,8 +234,10 @@ server_params = StdioServerParameters(
     env={"GITHUB_PERSONAL_ACCESS_TOKEN": "<your-token>"},   # the variable this server reads
 )
 
-# Context manager (recommended) — auto-starts and stops
-with MCPServerAdapter(server_params) as tools:
+# Context manager (recommended) — auto-starts and stops.
+# Pass tool names to load only those: this server exposes 26 tools, and Anthropic
+# models reject a request with more than 20 strict tools.
+with MCPServerAdapter(server_params, "list_issues") as tools:
     agent = Agent(
         role="GitHub Analyst",
         goal="Analyze repository activity",
