@@ -11,7 +11,7 @@ Exactly what `crewai deploy create` / `crewai deploy push` send to CrewAI AMP on
 1. Runs pre-deploy validation (unless `--skip-validate`). If there is no lockfile it ignores `missing_lockfile`, and validation's own `uv run` usually creates `uv.lock`; if it is still missing, it runs `crewai install`, then validates again.
 2. Prepares Git: if the directory is not a Git repo, runs `git init`; if the repo has no commits (the `crewai create` scaffold runs `git init` without committing), commits everything not ignored as "Initial crew" after adding `.env`, `.env.*`, `.venv/`, caches, `build/`, `dist/` to `.git/info/exclude`. If `origin` exists, runs `git fetch`.
 3. Reads every `KEY=VALUE` line from `./.env`.
-4. With an `origin` remote: asks you to confirm the env var names and the remote URL (`-y` skips both prompts), then creates a Git-based deployment from the project name, the remote URL, and the env vars. No code leaves your machine. The CLI does not check that AMP can read the repo: with a private repo AMP has no access to, create succeeds and the build fails with `git_clone_failure` (`fatal: could not read Username for 'https://github.com': terminal prompts disabled`). A later `push` retries the same clone and fails the same way until the AMP org has a repository connection with access.
+4. With an `origin` remote: asks you to confirm the env var names and the remote URL (`-y` skips both prompts), then creates a Git-based deployment from the project name, the remote URL, and the env vars. No code leaves your machine. The CLI does not check that AMP can read the repo: with a private repo AMP has no access to, create succeeds and the build fails with `git_clone_failure` (`fatal: could not read Username for 'https://github.com': terminal prompts disabled`). A later `push` retries the same clone and fails the same way until the AMP org has a repository connection with access; once it does, the next `push` builds the same deployment without recreating it.
 5. Without `origin`: prints `No origin remote found. Deploying from a ZIP upload instead.`, shows `Press Enter to continue with N env vars: KEY1, KEY2` (`-y` skips it; with no terminal input it aborts before uploading), and uploads a ZIP plus the env vars.
 
 `crewai deploy push [--uuid <id>]`:
@@ -27,7 +27,9 @@ On crewai 1.15.22-1.15.23, `push` takes step 4 in practice. AMP itself builds fr
 |---|---|---|---|
 | ZIP | no `origin` | ZIP of the working tree (uncommitted edit included) + `.env` | Built the new ZIP; the uncommitted code ran |
 | ZIP | `origin` added later | Redeploy request only | Rebuilt the previous ZIP; new code and `.env` values were not deployed; Online |
-| Git | `origin` present | Redeploy request only | Cloned the repository |
+| Git | `origin` present, uncommitted edit | Redeploy request only | Cloned the remote; the previous pushed code ran |
+| Git | `origin` present, edit committed but not pushed | Redeploy request only | Same: the previous pushed code ran |
+| Git | `origin` present, commit pushed | Redeploy request only | Cloned the remote; the new commit ran |
 | Git | `origin` removed | ZIP + `.env` | Ignored the ZIP and cloned the repository |
 
 Consequence: never change `origin` after create, and read the push output - `Preparing project ZIP...` / `Uploading project ZIP...` appear only when a ZIP was sent. `push` also prints the deployment record, including its bearer token; keep that output out of tickets and CI logs.
@@ -87,7 +89,7 @@ Practices:
 - Keep values bare in `.env`: no inline comments, no surrounding quotes.
 - Keep exactly this deployment's complete key set in the project `.env`; never park unrelated secrets there, and never push with a partial file.
 - To redeploy a ZIP deployment without touching its variables, move `.env` aside for the push, and manage values in the dashboard.
-- On a Git-based deployment, change env values in the dashboard; editing `.env` and pushing does nothing.
+- On a Git-based deployment, change env values in the dashboard; editing `.env` and pushing does nothing. Observed: the values sent by `create` were still in place after later pushes with a changed `.env`.
 - Locally, python-dotenv strips inline comments (`3  # note` -> `3`), so a local run will not reveal the verbatim value the deployment receives.
 - Set every variable on the deployment itself and confirm it with a kickoff that reports the variable names it can see (never the values).
 

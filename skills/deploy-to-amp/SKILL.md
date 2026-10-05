@@ -85,7 +85,7 @@ if __name__ == "__main__":
 | `type = "crew"` on a flow project | `Cannot find src/<pkg>/crew.py`, `Cannot find src/<pkg>/config` | `type = "flow"` |
 | Renamed `src/research_crew/` to `src/researchcrew/` | `Cannot find src/research_crew/` and `Hatchling cannot determine which files to ship` | Keep the dir equal to the normalized `[project].name` |
 | `uv.lock` missing | `missing_lockfile` error | `uv lock`, then `git add uv.lock` |
-| Edited `pyproject.toml` after locking | `stale_lockfile` warning (does not block) - deployed deps may differ from local. The check compares file times, and the CLI itself writes `[tool.crewai] project_id` into `pyproject.toml` when it is missing, which also triggers it | Re-run `uv lock` after every `pyproject.toml` edit and commit both |
+| Edited `pyproject.toml` after locking | `stale_lockfile` warning (does not block) - deployed deps may differ from local. The check compares file times, and the CLI itself writes `[tool.crewai] project_id` into `pyproject.toml` when it is missing, which also triggers it | Re-run `uv lock` after every `pyproject.toml` edit. `uv lock` leaves an already-current lockfile untouched, so the warning can persist; if `uv lock --check` passes, `touch uv.lock` clears it and commit both |
 | Importing code from a sibling dir (`../shared_lib`) via `sys.path` | Validate passes locally, but only the project root is uploaded: the AMP build fails with `ModuleNotFoundError: No module named 'helpers'` and status `Automation error, fix the code and deploy again.` | Move shared code inside `src/<pkg>/` or publish it as a package dependency |
 | `anthropic/...` model with plain `crewai[tools]` | Locally: `Anthropic native provider not available, to install: uv add "crewai[anthropic]"`; validate reports it only as `@CrewBase not found` / `No Flow subclass found`, so `create` and `push` refuse the project | `uv add "crewai[anthropic]"` so the extra lands in `pyproject.toml` and `uv.lock`. |
 
@@ -132,7 +132,7 @@ See [validate-checks.md](references/validate-checks.md) for every check and code
 Rules that follow from this:
 
 - Never add or remove `origin` on a project after `create`. For a ZIP deployment, a correct push prints `Preparing project ZIP...` and `Uploading project ZIP...`; if those lines are missing, nothing new shipped.
-- Git-based: `git commit` and `git push` before `crewai deploy push`, or the build runs your last pushed code.
+- Git-based: AMP builds the commit on the remote, never your disk. Uncommitted edits and local commits that are not pushed are both skipped (the build ran the previous pushed version, status `Crew is Online`). `git commit`, `git push`, then `crewai deploy push`.
 - ZIP-based: the ZIP holds files Git tracks plus untracked files that are not ignored, and always drops `.env`, `.env.*` (except `.env.example` / `.env.sample`), `.git`, `.venv`, caches, `build/` and `dist/`. Add run outputs (`report.md`, `output/`) and scratch files to `.gitignore`, or they ship. Do not depend on root-level dotfiles at runtime: `.gitignore` and `.env.example` were in the ZIP but absent from the deployed project root.
 - If the directory has no commits yet (the scaffold runs `git init` but does not commit), `create`/`push` commits everything not ignored as "Initial crew". If `uv.lock` is missing, validation's own `uv run` creates it before the upload (and `create`/`push` fall back to `crewai install`).
 - Only the project root is packaged. Monorepo subfolders need a working directory set in the dashboard (the CLI create flow has no such option).
@@ -156,7 +156,7 @@ What the CLI does with local `.env`:
 | `.env` present on `create` | Every non-comment `KEY=VALUE` line, unfiltered - including unrelated secrets in the file |
 | `.env` present on a ZIP `push` (no local `origin`) | The same, and the deployment's variables are **replaced** by exactly this set: a key missing from `.env` is deleted from the deployment |
 | `.env` absent | No env fields at all (it prints `Error: .env not found.` and carries on); the deployment keeps its current variables |
-| `push` with a local `origin` | Never sends env vars - change values in the dashboard |
+| `push` with a local `origin` | Never sends env vars - change values in the dashboard. A Git-based deployment keeps the values from its `create` until you edit them there |
 
 Values are sent verbatim: `MAX_CASES=3  # note` arrives as `3  # note` (python-dotenv locally strips the comment and gives `3`, so local runs hide this), and `QUOTED="abc"` arrives with the quotes. Write `.env` with bare values and no inline comments.
 
@@ -191,7 +191,7 @@ The CLI keeps one selected org per OS user in `~/.config/crewai/settings.json`, 
 | Deploy keeps old env values after editing `.env` | Push with a local `origin` never sends env vars | Edit the values in the dashboard |
 | A stale value overwrites a rotated key, an unrelated secret appears on the deployment, or a key vanished | ZIP `create`/`push` uploaded exactly the keys in local `.env`, replacing the deployment's set | Deploy from a tree without `.env`, or with the complete set of this deployment's keys |
 | Kickoff `FAILED` with `ValueError: ANTHROPIC_API_KEY is required` although status is Online | Key missing on the deployment (often removed by a ZIP push with a partial `.env`) | Set it in the dashboard, or push with a complete `.env` |
-| `git_clone_failure`, `could not read Username for 'https://github.com'` | Git-based deployment and AMP has no access to the (private) repo | Check Settings > Git Repositories in the AMP org: if it only offers "Configure GitHub" / "Add Repository", nothing is connected. Connect GitHub (or add the repo) with access to this repository, then push again. Until then every `push` re-runs the same clone and fails the same way. Or deploy from ZIP (a project with no `origin`) |
+| `git_clone_failure`, `could not read Username for 'https://github.com'` | Git-based deployment and AMP has no access to the (private) repo | Check Settings > Git Repositories in the AMP org: if it only offers "Configure GitHub" / "Add Repository", nothing is connected. Connect GitHub (or add the repo) with access to this repository, then push again: a deployment created from the CLI picks up the connection on its next `push`, with no dashboard step and no need to recreate it. Until then every `push` re-runs the same clone and fails the same way. Or deploy from ZIP (a project with no `origin`) |
 | `Automation error, fix the code and deploy again.` | The AMP build's import test failed | `crewai deploy logs` shows the real traceback |
 | `MAX_CASES` parses as `3  # note` | Inline comment in `.env` sent verbatim | Bare values only |
 | `Expected to find at least one of these files: uv.lock or poetry.lock` | No lockfile | `uv lock`, commit it |

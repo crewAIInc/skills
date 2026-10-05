@@ -18,7 +18,7 @@ Checks run in this order; a failure early on skips the checks that depend on it.
 | `invalid_pyproject` | ERROR | pyproject.toml is not valid TOML | Fix the TOML |
 | `missing_project_name` | ERROR | pyproject.toml is missing [project].name | Add `name = "..."` under `[project]` |
 | `missing_lockfile` | ERROR | Expected to find at least one of these files: uv.lock or poetry.lock | `uv lock` and commit it |
-| `stale_lockfile` | WARNING | uv.lock is older than pyproject.toml | `uv lock` and commit |
+| `stale_lockfile` | WARNING | uv.lock is older than pyproject.toml | `uv lock` and commit. The check compares file times and `uv lock` does not rewrite a current lockfile; if `uv lock --check` passes, `touch uv.lock` |
 | `missing_src_dir` | ERROR | Missing src/ directory | Use the `src/<pkg>/` layout |
 | `missing_package_dir` | ERROR | Cannot find src/<pkg>/ | Make the dir match the normalized `[project].name` |
 | `stale_egg_info` | WARNING | Stale build artifact in src/ | Delete `src/*.egg-info`, ignore it in Git |
