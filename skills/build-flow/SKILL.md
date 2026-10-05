@@ -30,7 +30,7 @@ What the scaffold gives you:
 | `pyproject.toml` | `[project.scripts]` `kickoff`, `run_crew` (both `<pkg>.main:kickoff`), `plot`, `run_with_trigger`; `[tool.crewai] type = "flow"` |
 | `src/<pkg>/main.py` | A `Flow[ContentState]` subclass plus `kickoff()` and `plot()` functions; `from crewai.flow import Flow, listen, start` |
 | `src/<pkg>/crews/content_crew/` | A classic `@CrewBase` crew with `config/agents.yaml` and `config/tasks.yaml`; its agents set no `llm`, so they use the default OpenAI model |
-| `.env` | `OPENAI_API_KEY=YOUR_API_KEY` - a placeholder; a run with it fails with `401 ... Incorrect API key provided` |
+| `.env` | `OPENAI_API_KEY=YOUR_API_KEY` - a placeholder; a run with it fails with `401 ... Incorrect API key provided`. An `OPENAI_API_KEY` exported in the shell takes precedence over `.env`: with a valid key exported, the unmodified scaffold's `crewai run` ran its three agents on `gpt-4.1-mini` and wrote `output/post.md` |
 | `AGENTS.md`, `CLAUDE.md`, `GEMINI.md` (plus `CURSOR.md` from 1.15.23), `README.md`, `tests/` | Coding-assistant instructions and an empty tests folder |
 | `.git/` | `crewai create` runs `git init` (no commit, no remote) |
 

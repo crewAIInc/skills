@@ -84,7 +84,7 @@ uv run python -c "from acme_flow.main import ContentFlow; ContentFlow()"
 |---|---|---|
 | Imports from outside the project root | The local `sys.path` hack works; only the root is uploaded. On AMP the build's import test fails: `ModuleNotFoundError: No module named '<module>'`, status `Automation error, fix the code and deploy again.` | Keep each deployable self-contained |
 | `origin` added or removed after create | Validate never looks at the deployment | Keep `origin` as it was at create; check push output for `Uploading project ZIP...` |
-| AMP cannot read a private Git repo | Validate never contacts the platform | Connect GitHub in AMP first; the failure shows only after create as `git_clone_failure` |
+| AMP cannot read a private Git repo | Validate never contacts the platform | Connect the repo in the AMP org (Settings > Git Repositories) first; the failure shows only after create as `git_clone_failure` |
 | Uncommitted or unpushed changes on a Git-based deployment | Validate reads your working tree; AMP builds from the repo | `git status` clean and pushed before `deploy push` |
 | Wrong org selected | Validate never contacts the platform | `crewai org current` |
 | Env var present locally but missing on the deployment | Validate reads local `.env` and your shell | Set it on the deployment; check with a kickoff |

@@ -273,7 +273,7 @@ print(Crew(agents=[writer], tasks=[task]).kickoff(inputs={"topic": "bees"}).raw)
 
 ## 8. Memory and knowledge
 
-Memory is one `Memory` class (LanceDB storage). Its defaults call OpenAI: `text-embedding-3-large` for embeddings and `gpt-5.4-mini` for analysis.
+Memory is one `Memory` class (LanceDB storage). Its defaults call OpenAI: `text-embedding-3-large` for embeddings and `gpt-5.4-mini` for analysis. `Crew(memory=True)` analyses with the first agent's `llm` instead, and knowledge with no `embedder` embeds with `text-embedding-3-small`. Live with an OpenAI key: a `memory=True` crew stored a codename in one process and a new crew recalled it in the next; crew and agent knowledge both answered from the source.
 
 | You probably wrote | Current form | What the wrong form does |
 |---|---|---|
@@ -284,8 +284,9 @@ Memory is one `Memory` class (LanceDB storage). Its defaults call OpenAI: `text-
 | `agent.kickoff(...)` on an agent with `knowledge_sources` | Run the agent as a task in a `Crew`, or put the facts in the prompt | No error with or without a key: `Agent.kickoff()` never queries agent knowledge, so the answer ignores it |
 | `Crew(knowledge_sources=[...])` with no key or embedder | Same | Logs `Failed to upsert documents`; crew runs with **no** knowledge |
 | Changing the knowledge `embedder` after a run stored knowledge | `crewai reset-memories -kn` (or `crew.reset_memories(command_type="knowledge")`), then run | `Embedding function conflict: new: <x> vs persisted: openai`; the crew runs with no knowledge |
+| Adding `embedder={"provider": "openai"}` after knowledge was stored with no `embedder` (or changing the OpenAI embedding model) | Same reset | `Failed to upsert documents: Collection expecting embedding with dimension of 1536, got 3072` (the explicit provider defaults to `text-embedding-3-large`); the crew answers without its knowledge |
 
-The embedder config shape is `{"provider": <name>, "config": {...}}`; the OpenAI model key is `model_name`. The `ollama` provider below also needs `uv add ollama` and a running Ollama server with the model pulled; without the package, crew knowledge is silently `None`. `{"provider": "onnx"}` is a local, key-free embedder that core crewai can already run (chromadb's `onnxruntime`; about 80 MB of model downloaded on first use) - the design-agent skill's memory-and-knowledge reference has working examples. For a deterministic embedder in tests, use a callable (`Memory`) or a custom class (knowledge) - see [verify-installed-api.md](references/verify-installed-api.md).
+The embedder config shape is `{"provider": <name>, "config": {...}}`; the OpenAI model key is `model_name`. `"model"` raises `TypeError: ... unexpected keyword argument 'model'` in `Memory`, and for knowledge it is silently ignored (the crew embeds with `text-embedding-3-large`). The `ollama` provider below also needs `uv add ollama` and a running Ollama server with the model pulled; without the package, crew knowledge is silently `None`. `{"provider": "onnx"}` is a local, key-free embedder that core crewai can already run (chromadb's `onnxruntime`; about 80 MB of model downloaded on first use) - the design-agent skill's memory-and-knowledge reference has working examples. For a deterministic embedder in tests, use a callable (`Memory`) or a custom class (knowledge) - see [verify-installed-api.md](references/verify-installed-api.md).
 
 ```python
 from crewai import Agent, Crew, Memory, Task
@@ -363,6 +364,7 @@ The classic layout: `src/<name>/crew.py` (`@CrewBase` class), `src/<name>/config
 | `token_usage` larger than the run could have used | An `LLM` object shared by several agents or reused across crews | One `LLM` per agent per crew, or count `LLMCallCompletedEvent`s |
 | Agent never uses its MCP tools under `akickoff()` | `https://` string in `mcps` inside a running event loop | `MCPServerHTTP(url=...)` |
 | `Embedding function conflict ... persisted: openai` | Knowledge was stored with another embedder | `crewai reset-memories -kn` |
+| `Collection expecting embedding with dimension of 1536, got 3072` | Knowledge was stored with another OpenAI embedding model | `crewai reset-memories -kn` |
 | `crewai run` reports `non-zero exit status 1` after the crew succeeds | `run()` returns the `CrewOutput` | Do not return it |
 
 ---

@@ -315,7 +315,7 @@ Live run with a scripted reviewer and `anthropic/claude-haiku-4-5` as the `llm`:
 - `llm` — interprets free-text feedback into one of the `emit` labels
 - `default_outcome` - used if no feedback is provided (requires `emit`)
 - `provider` - an object with `request_feedback(context, flow) -> str`; the default reads the console, so pass one for tests, UIs and deployed flows
-- `learn` - if `True`, distills feedback into lessons stored in the flow's `memory` and uses them to pre-review later outputs. Flow memory uses the default OpenAI embedder unless you configure another; failures are logged, not raised
+- `learn` - if `True`, distills feedback into lessons stored in the flow's `memory` and uses them to pre-review later outputs. The decorator's `llm` distills and applies the lessons; the flow's default `Memory()` stores them with OpenAI defaults (`text-embedding-3-large`, `gpt-5.4-mini` for analysis) unless you set `memory = Memory(...)` on the flow. Live run with an OpenAI key: feedback "always end every draft with the exact tag [checked-by-ops]" was stored as a lesson, and on the next run (a new process) the reviewer was shown the draft already ending in `[checked-by-ops]`. Distill and pre-review failures are logged, not raised, unless `learn_strict=True`
 - `HumanFeedbackResult` fields: `output`, `feedback`, `outcome`, `timestamp`, `method_name`, `metadata` (there is no `feedback_text`). Also on the flow: `self.last_human_feedback`, `self.human_feedback_history`
 - Feedback the LLM cannot map to a label raises `HumanFeedbackCollapseError`
 

@@ -155,3 +155,5 @@ agent = Agent(
     ],
 )
 ```
+
+Both tools embed their files at construction with OpenAI `text-embedding-3-small`, so `OPENAI_API_KEY` must be valid before the `Agent(...)` line runs (an invalid key fails there with `Error code: 401`). Live run with a valid key and the agent on the default `gpt-4.1-mini`: one task called both `search_a_pdfs_content` and `search_a_directorys_content` and answered with a fact from each file. For a non-OpenAI embedder, pass `config={"embedding_model": {...}}` (see the **connect-tools-and-mcp** skill).

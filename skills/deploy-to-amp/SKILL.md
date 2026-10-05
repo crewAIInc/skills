@@ -115,11 +115,11 @@ See [validate-checks.md](references/validate-checks.md) for every check and code
 
 | Path | Code AMP builds | Env vars sent |
 |---|---|---|
-| `crewai deploy create`, project has an `origin` remote | AMP clones the repo; nothing is uploaded from your disk. AMP needs access to the repo (GitHub connected in AMP) - otherwise create still prints `Deployment created successfully!` and the build then fails with `git_clone_failure` (`could not read Username for 'https://github.com'`) | Every key in local `.env`, after a "Press Enter to continue with N env vars: ..." prompt (`-y` skips it) |
+| `crewai deploy create`, project has an `origin` remote | AMP clones the repo; nothing is uploaded from your disk. AMP needs read access to the repo through a connection in the AMP org (Settings > Git Repositories: GitHub OAuth or Any Git Repository) - otherwise create still prints `Deployment created successfully!` and the build then fails with `git_clone_failure` (`could not read Username for 'https://github.com'`) | Every key in local `.env`, after a "Press Enter to continue with N env vars: ..." prompt (`-y` skips it) |
 | `crewai deploy create`, no `origin` remote | A ZIP of your working tree (prints `No origin remote found. Deploying from a ZIP upload instead.`) | Every key in local `.env`, after the same prompt |
 | `crewai deploy push`, local `origin` present | Nothing is uploaded; AMP rebuilds from the deployment's own source | None |
 | `crewai deploy push`, no local `origin` | A fresh ZIP of your working tree, including uncommitted edits | Every key in local `.env`, with no prompt - and it **replaces** the deployment's variables (see section 4) |
-| Dashboard, GitHub connection | The repository and branch you pick (optional auto-deploy on new commits) | What you enter in the dashboard |
+| Dashboard, Deploy from Code (GitHub OAuth or Git Repository tab) | The repository and branch you pick from a connection (optional auto-deploy on new commits) | What you enter in the dashboard |
 | Dashboard, ZIP upload | The ZIP you choose | What you enter in the dashboard |
 
 `push` decides between a ZIP upload and a rebuild from your **local** `origin`, while AMP builds from the source the deployment was **created** with. If the two disagree, the push can succeed without shipping your changes:
@@ -191,7 +191,7 @@ The CLI keeps one selected org per OS user in `~/.config/crewai/settings.json`, 
 | Deploy keeps old env values after editing `.env` | Push with a local `origin` never sends env vars | Edit the values in the dashboard |
 | A stale value overwrites a rotated key, an unrelated secret appears on the deployment, or a key vanished | ZIP `create`/`push` uploaded exactly the keys in local `.env`, replacing the deployment's set | Deploy from a tree without `.env`, or with the complete set of this deployment's keys |
 | Kickoff `FAILED` with `ValueError: ANTHROPIC_API_KEY is required` although status is Online | Key missing on the deployment (often removed by a ZIP push with a partial `.env`) | Set it in the dashboard, or push with a complete `.env` |
-| `git_clone_failure`, `could not read Username for 'https://github.com'` | Git-based deployment and AMP has no access to the (private) repo | Connect GitHub in AMP and grant it the repo, or deploy from ZIP (no `origin`) |
+| `git_clone_failure`, `could not read Username for 'https://github.com'` | Git-based deployment and AMP has no access to the (private) repo | Check Settings > Git Repositories in the AMP org: if it only offers "Configure GitHub" / "Add Repository", nothing is connected. Connect GitHub (or add the repo) with access to this repository, then push again. Until then every `push` re-runs the same clone and fails the same way. Or deploy from ZIP (a project with no `origin`) |
 | `Automation error, fix the code and deploy again.` | The AMP build's import test failed | `crewai deploy logs` shows the real traceback |
 | `MAX_CASES` parses as `3  # note` | Inline comment in `.env` sent verbatim | Bare values only |
 | `Expected to find at least one of these files: uv.lock or poetry.lock` | No lockfile | `uv lock`, commit it |

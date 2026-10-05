@@ -68,7 +68,7 @@ Constructed with no API keys in the environment (crewai-tools 1.15.22-1.15.23):
 |---|---|
 | `SerperDevTool()`, `ScrapeWebsiteTool()`, `FileReadTool()`, `FileWriterTool()`, `DirectoryReadTool()`, `ArxivPaperTool()` | Construct fine. Keyed tools fail only when called |
 | `BraveSearchTool()` | `ValueError: BRAVE_API_KEY environment variable is required for BraveSearchTool` |
-| `WebsiteSearchTool()`, `PDFSearchTool()` (all RAG tools) | `ValidationError ... The OPENAI_API_KEY environment variable is not set.` - they build an embedder at construction |
+| `WebsiteSearchTool()`, `PDFSearchTool()` (all RAG tools) | `ValidationError ... The OPENAI_API_KEY environment variable is not set.` - they build an embedder at construction. With a valid key they embed with OpenAI `text-embedding-3-small`; `PDFSearchTool(pdf=...)` and `DirectorySearchTool(directory=...)` embed the files right away, so an invalid key fails at construction with `Error code: 401` |
 | `EXASearchTool()`, `TavilySearchTool()`, `FirecrawlSearchTool()`, `SeleniumScrapingTool()` | Interactive prompt `You are missing the '<pkg>' package. Would you like to install it? [y/N]` - blocks under a terminal, `click.exceptions.Abort` with stdin closed |
 | `StagehandTool()` | `ImportError: \`stagehand\` package not found, please run \`uv add stagehand\`` |
 | `MCPServerAdapter(...)` | Same interactive prompt, worded as the `'mcp'` package, until `crewai-tools[mcp]` is installed |

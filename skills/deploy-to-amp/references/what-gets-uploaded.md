@@ -11,7 +11,7 @@ Exactly what `crewai deploy create` / `crewai deploy push` send to CrewAI AMP on
 1. Runs pre-deploy validation (unless `--skip-validate`). If there is no lockfile it ignores `missing_lockfile`, and validation's own `uv run` usually creates `uv.lock`; if it is still missing, it runs `crewai install`, then validates again.
 2. Prepares Git: if the directory is not a Git repo, runs `git init`; if the repo has no commits (the `crewai create` scaffold runs `git init` without committing), commits everything not ignored as "Initial crew" after adding `.env`, `.env.*`, `.venv/`, caches, `build/`, `dist/` to `.git/info/exclude`. If `origin` exists, runs `git fetch`.
 3. Reads every `KEY=VALUE` line from `./.env`.
-4. With an `origin` remote: asks you to confirm the env var names and the remote URL (`-y` skips both prompts), then creates a Git-based deployment from the project name, the remote URL, and the env vars. No code leaves your machine. The CLI does not check that AMP can read the repo: with a private repo AMP has no access to, create succeeds and the build fails with `git_clone_failure` (`fatal: could not read Username for 'https://github.com': terminal prompts disabled`).
+4. With an `origin` remote: asks you to confirm the env var names and the remote URL (`-y` skips both prompts), then creates a Git-based deployment from the project name, the remote URL, and the env vars. No code leaves your machine. The CLI does not check that AMP can read the repo: with a private repo AMP has no access to, create succeeds and the build fails with `git_clone_failure` (`fatal: could not read Username for 'https://github.com': terminal prompts disabled`). A later `push` retries the same clone and fails the same way until the AMP org has a repository connection with access.
 5. Without `origin`: prints `No origin remote found. Deploying from a ZIP upload instead.`, shows `Press Enter to continue with N env vars: KEY1, KEY2` (`-y` skips it; with no terminal input it aborts before uploading), and uploads a ZIP plus the env vars.
 
 `crewai deploy push [--uuid <id>]`:
@@ -97,7 +97,7 @@ Practices:
 
 | Path | Notes |
 |---|---|
-| GitHub connection | Pick repository and branch; optional "Automatically deploy new commits". Env vars entered in the form. |
+| Deploy from Code: GitHub OAuth or Git Repository tab | Needs a connection first (Settings > Git Repositories). Pick repository and branch; optional "Automatically deploy new commits". Env vars entered in the form. |
 | ZIP upload | Upload a ZIP of the project root (not its parent folder). Exclude `.git`, `.venv`, `.env` and caches yourself. |
 | Monorepo | Set a working directory (relative to the repo or ZIP root) in the dashboard. The CLI create flow has no option for it, and auto-deploy is disabled while a working directory is set. |
 

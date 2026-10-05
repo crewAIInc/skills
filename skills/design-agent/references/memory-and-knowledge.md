@@ -2,7 +2,7 @@
 
 How to configure memory, knowledge sources, and embedders for crewAI agents and crews.
 
-Verified against crewai 1.15.23 on 2026-10-01; the memory and knowledge examples below were run with `anthropic/claude-haiku-4-5` and the local `onnx` embedder, with no OpenAI key.
+Verified against crewai 1.15.23 on 2026-10-01; the memory and knowledge examples below were run with `anthropic/claude-haiku-4-5` and the local `onnx` embedder, with no OpenAI key. The OpenAI defaults (embedders, memory analysis LLM, default agent model) were also run live with an OpenAI key on 1.15.22 and 1.15.23.
 
 ---
 
@@ -36,7 +36,7 @@ crew = Crew(
 )
 ```
 
-With `memory=True`, the crew builds `Memory` with the crew's `embedder` (OpenAI `text-embedding-3-large` when unset) and the first agent's `llm` for analysis. Verified live: a crew of `claude-haiku-4-5` agents with the `onnx` embedder stored "my project codename is BLUE HERON" in run 1, and a new crew answered "BLUE HERON" in run 2.
+With `memory=True`, the crew builds `Memory` with the crew's `embedder` (OpenAI `text-embedding-3-large` when unset) and the first agent's `llm` for analysis (with the OpenAI defaults: agents on `gpt-4.1-mini`, no `gpt-5.4-mini` call, `text-embedding-3-large` embeddings; a codename saved in one process was recalled by a new crew in the next). Also verified live: a crew of `claude-haiku-4-5` agents with the `onnx` embedder stored "my project codename is BLUE HERON" in run 1, and a new crew answered "BLUE HERON" in run 2.
 
 ### Custom Memory Configuration
 
@@ -191,7 +191,7 @@ agent = Agent(
 
 ## 3. Embedder Configuration
 
-Both memory and knowledge need an embedder for vector search. Configure it at the agent or crew level, or on `Memory(embedder=...)`. The shape is `{"provider": <name>, "config": {...}}`. The model key is `model_name` for most providers; `"model"` raises `TypeError: OpenAIEmbeddingFunction.__init__() got an unexpected keyword argument 'model'` for OpenAI. Most providers also need their Python package installed - constructing the embedder without it raises an error naming the package.
+Both memory and knowledge need an embedder for vector search. Configure it at the agent or crew level, or on `Memory(embedder=...)`. The shape is `{"provider": <name>, "config": {...}}`. The model key is `model_name` for most providers. For OpenAI, `"model"` raises `TypeError: OpenAIEmbeddingFunction.__init__() got an unexpected keyword argument 'model'` in `Memory`, and for crew knowledge it is silently ignored (the crew embeds with `text-embedding-3-large`). crewai's own `Embedding dimension mismatch` message suggests `"config": {"model": ...}`; use `model_name`. Most providers also need their Python package installed - constructing the embedder without it raises an error naming the package.
 
 ### ONNX (Local, no API key) - verified working
 
@@ -209,6 +209,8 @@ embedder = {
     "config": {"model_name": "text-embedding-3-small"},   # default: text-embedding-3-large
 }
 ```
+
+Verified live with an OpenAI key: this config embedded with `text-embedding-3-small` for both crew knowledge and `Memory`. With no `embedder` at all, memory uses `text-embedding-3-large` but knowledge uses `text-embedding-3-small`. The two have different dimensions (1536 vs 3072), so adding `{"provider": "openai"}` to a crew whose knowledge was stored with no embedder logs `Failed to upsert documents: Collection expecting embedding with dimension of 1536, got 3072` and the crew answers without its knowledge until `crewai reset-memories -kn`.
 
 ### Ollama (Local)
 

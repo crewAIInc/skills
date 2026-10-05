@@ -75,6 +75,7 @@ The installed crewai 1.15.22 source behind each row in the skill. Line numbers a
 | Claim | Source |
 |---|---|
 | Default memory embedder is OpenAI `text-embedding-3-large`; default analysis LLM `gpt-5.4-mini` | `crewai/memory/unified_memory.py:52, 89, 295` |
+| Knowledge with no `embedder` embeds with `text-embedding-3-small`; `{"provider": "openai"}` defaults to `text-embedding-3-large` (1536 vs 3072 dimensions); a `model` key is passed through to `OpenAIEmbeddingFunction`, which rejects it | `crewai/rag/chromadb/config.py:62`; `crewai/rag/embeddings/providers/openai/openai_provider.py:33-34`; `crewai/rag/embeddings/factory.py:124` |
 | `remember()` without an embedder raises `RuntimeError` | `crewai/memory/unified_memory.py:293` |
 | Agent knowledge failure raises at kickoff | `crewai/agent/core.py:492` |
 | Agent knowledge is queried only on the task path (`execute_task` / `aexecute_task`), never by `Agent.kickoff()` (1.15.23) | `crewai/agent/core.py:979-986, 1121-1123` (`handle_knowledge_retrieval` calls); `kickoff` at `:1774` has none |
