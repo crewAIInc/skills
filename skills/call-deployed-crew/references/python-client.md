@@ -8,8 +8,8 @@ What it does, and why:
 |---|---|
 | `run()` calls `GET /inputs` first and refuses to kick off with a missing key | `422` round trips, and silent runs where `{placeholder}` text reaches the model |
 | Wraps values in `{"inputs": {...}}` and sends non-strings as JSON strings | the bare-body `400` / `422`; type surprises (the API documents input values as strings) |
-| Long timeout on the first request, then the normal timeout | failing on a slow first response after a quiet period |
-| Retries `502` / `503` / `504` honoring `Retry-After`, and connection errors | giving up while a deployment is starting |
+| Long timeout on the first request, then the normal timeout | failing on a slow first response |
+| Retries `502` / `503` / `504` honoring `Retry-After`, and connection errors | giving up on a transient gateway error |
 | Never retries `POST /kickoff` after a read timeout | duplicate runs |
 | Reads `state`, then `status`, lower-cased; accepts both documented vocabularies | poll loops that never see `"completed"` |
 | Reads `result_json`, then `result` / `result.output` | empty results |
@@ -66,7 +66,7 @@ class DeployedCrew:
         token: str,
         *,
         request_timeout: float = 30.0,     # normal calls
-        first_call_timeout: float = 180.0,  # an idle deployment can be slow to answer
+        first_call_timeout: float = 180.0,  # the first response can be slow; allow for it
         retries: int = 4,
     ) -> None:
         self.base_url = base_url.rstrip("/")

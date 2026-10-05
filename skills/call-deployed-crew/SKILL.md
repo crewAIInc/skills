@@ -132,9 +132,9 @@ Prefer webhooks (section 4) over tight polling when many runs are in flight.
 
 ---
 
-## 6. The first call after a quiet period
+## 6. The first call
 
-Do not assume the first request after a quiet period answers as fast as the rest, or that it answers `200` on the first try. Design for it:
+Do not assume the first request answers as fast as the rest, or that it answers `200` on the first try. Design for it:
 
 - Give the first request a generous timeout (minutes, not seconds) and retry `502` / `503` / `504` with backoff, honoring `Retry-After`.
 - Make that first request `GET /inputs`: it is read-only, so retrying it is always safe, and you need its key list anyway.
@@ -171,11 +171,11 @@ Your deployment serves many kickoffs. Do not assume each one gets fresh Python o
 |---|---|---|
 | Write to `task.description` (or agent `role`/`goal`/`backstory`) at runtime, e.g. in `@before_kickoff` | crewai keeps the first-seen text as the template and re-interpolates from it. Two runs on one crew object: run 2's prompt carried run 1's customer and not its own | Put per-run values in `{placeholders}` and pass them as inputs; `@before_kickoff` may add or normalise **inputs** and return them |
 | Keep per-run data on a tool instance (`self.seen`, `self.customer`) | `crew.copy()` (used by `kickoff_for_each`) reuses the same tool objects, so run 2 saw run 1's data | Keep tools stateless; pass per-run values as tool arguments, or read them from a `contextvars.ContextVar` set in `@before_kickoff` |
-| Run two kickoffs at once on one `Crew` object | Overlapping `akickoff()` calls: the second raised `RuntimeError: Executor is already running. Cannot invoke the same executor instance concurrently.` Overlapping `kickoff_async()` calls raised it in some runs and not others In a few runs the run that survived had picked up the other run's inputs in a later task's prompt. | When you host crews yourself, build a fresh crew per request: `ResearchCrew().crew().kickoff(inputs=...)` |
+| Run two kickoffs at once on one `Crew` object | Overlapping `akickoff()` calls: the second raised `RuntimeError: Executor is already running. Cannot invoke the same executor instance concurrently.` Overlapping `kickoff_async()` calls raised it in some runs and not others. Results were not reliable: in a few runs, a later task's prompt in the surviving run carried the other run's inputs. | When you host crews yourself, build a fresh crew per request: `ResearchCrew().crew().kickoff(inputs=...)` |
 | Store results, quotas, or "already processed" flags in memory or on local disk | They vanish on restart and are not shared between workers | Use storage you own (database, object store) and pass ids in inputs |
 | Call `input()` in a deployed crew | Nobody is at a terminal to answer it, so the run cannot finish | Use `human_input=True` + `POST /resume`, or a Flow with `@human_feedback` |
 
-Memory-heavy work (large files, big dataframes, local models, large knowledge bases) belongs in its own deployment, so it never competes with unrelated automations for memory. Stream or chunk large inputs instead of loading them whole, measure peak memory locally before deploying, and treat a run that stops with no error as a possible out-of-memory case to raise with CrewAI support.
+Stream or chunk large inputs (large files, big dataframes, large knowledge bases) instead of loading them whole, and measure peak memory locally before deploying.
 
 Shared external limits still apply across concurrent runs: enforce per-minute API limits by waiting, and claim any daily quota in shared storage under a lock.
 

@@ -10,6 +10,8 @@ How to write a Flow that wires correctly, keeps typed state, persists and resume
 Verified against crewai 1.15.22 and 1.15.23 on 2026-10-01.
 Run `crewai version` first; if the major/minor differs from 1.15, re-verify version-sensitive rows with the `ask-docs` skill before trusting them.
 
+Where the getting-started, design-agent or design-task skills in this plugin disagree with this skill, follow this skill - it was re-checked against crewai 1.15.22 and 1.15.23. The installed crewai source outranks both.
+
 ---
 
 ## 1. Scaffold and run a flow project
@@ -167,7 +169,7 @@ class FanIn(Flow):
 
 
 FanIn().kickoff()
-print(calls)   # [('or', 'A'), ('and', 'B')]
+print(calls)   # e.g. [('or', 'A'), ('and', 'B')] - the start methods run concurrently, so the values (and order) can vary
 ```
 
 - **`or_` fires once per kickoff**, on the first condition to complete. It does not run again when the second one completes, so you do not need a "seen" flag.

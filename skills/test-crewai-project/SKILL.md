@@ -62,7 +62,10 @@ import os
 import socket
 from pathlib import Path
 
-# Test-only switches. Set them before crewai is imported; never in the project's .env.
+# Optional, test-only switches. The AGENTS.md that `crewai create` writes leaves
+# turning observability off to the user, so ask before adding these three lines;
+# the network guard below already keeps tests offline.
+# If used, set them before crewai is imported; never in the project's .env.
 os.environ["CREWAI_DISABLE_TELEMETRY"] = "true"
 os.environ["CREWAI_TRACING_ENABLED"] = "false"
 os.environ["OTEL_SDK_DISABLED"] = "true"
@@ -370,9 +373,9 @@ Tracing precedence: the `tracing=` argument, then `CREWAI_TRACING_ENABLED`, then
 
 Rules:
 
-- **Disable observability only in tests.** Put the switches in `tests/conftest.py` or the CI test job's environment. Never put them in the project's `.env`, `main.py`, or a deployment's env vars, because that blinds production debugging.
+- **Disable observability only in tests, and only when the user chooses to.** Put the switches in `tests/conftest.py` or the CI test job's environment. Never put them in the project's `.env`, `main.py`, or a deployment's env vars, because that blinds production debugging.
 - Spell the values `true` / `false`. `true` is the only spelling every disable switch fully honors, and `CREWAI_TRACING_ENABLED` ignores `yes`/`no`/`on`/`off`.
-- To debug one run, use `CREWAI_TRACING_ENABLED=true crewai run` or `tracing=True`. What happens next depends on the release. On 1.15.22, before any consent is saved, crewai keeps the trace in memory and asks `Share this execution trace with CrewAI? [y/N]`. On 1.15.23, in an interactive terminal, turning tracing on counts as consent: the trace is uploaded with no prompt and consent is saved on the first run (the `[y/N]` prompt remains only for first-run auto-collection). On both, without an interactive terminal (CI, pytest) the buffer is discarded, so never rely on tracing to capture a CI run.
+- To debug one run, use `CREWAI_TRACING_ENABLED=true crewai run` or `tracing=True`. What happens next depends on the release. On 1.15.22, before any consent is saved, crewai keeps the trace in memory and asks `Share this execution trace with CrewAI? [y/N]`. On 1.15.23, in an interactive terminal, turning tracing on counts as consent: the trace is uploaded with no prompt and consent is saved on the first run (the `[y/N]` prompt remains only for first-run auto-collection). On both, without an interactive terminal (CI, pytest), a run with no CrewAI auth token discards its trace instead of uploading it, so do not rely on tracing to capture an unauthenticated CI run.
 - From 1.15.23, crewai wraps every `BaseLLM` subclass's `call` in a rate-limit retry: a stub that raises an error mentioning "rate limit" or 429 is called 3 times over about 3 s before the error surfaces. To test your own rate-limit handling, raise a different error type, or assert on the retried call count.
 - Traces contain task text, inputs and outputs. Use synthetic data in traced runs unless your data may leave the machine.
 
@@ -400,7 +403,7 @@ Rules:
 ## Checklist
 
 - [ ] `tests/stub_llm.py` copied from `references/stub_llm.py`; pytest added as a dev dependency
-- [ ] `conftest.py` sets the observability switches and an absolute `CREWAI_STORAGE_DIR` before importing crewai, and blocks the network
+- [ ] `conftest.py` sets an absolute `CREWAI_STORAGE_DIR` before importing crewai and blocks the network; the observability switches are present only if the user chose them
 - [ ] Every agent's LLM is injectable (factory parameter, swap after `.crew()`, or patched crew class)
 - [ ] Each structured task gets valid JSON from the stub, and tests assert `out.pydantic is not None`
 - [ ] At least one test asserts on prompt text (inputs, context, tool listing)

@@ -162,7 +162,7 @@ Observed: two `akickoff()` calls running at the same time on two `SupportCrew().
 | Call pattern on a single `Crew` object | Observed on 1.15.22-1.15.23 |
 |---|---|
 | Two concurrent `akickoff()` | Second run raises `RuntimeError: Executor is already running. Cannot invoke the same executor instance concurrently.` |
-| Two concurrent `kickoff_async()` (thread-based) | Nondeterministic: in some of our runs both finished; in others the second raised the same `RuntimeError`, and in a few of those (2 of 63 rounds on 1.15.23) the run that finished had used the other run's input in a later task's prompt |
+| Two concurrent `kickoff_async()` (thread-based) | Nondeterministic: sometimes both finished; sometimes the second raised the same `RuntimeError`, and in a few of those the run that finished had used the other run's input in a later task's prompt |
 | A fresh crew per run, concurrently | Both finish; each run's prompts contain only its own inputs |
 
 The agents and tasks hold per-run state (interpolated text, the agent executor), so a `Crew` object is not a reusable, thread-safe service object.
@@ -197,7 +197,7 @@ With `@CrewBase` the equivalent is `ResearchCrew().crew().kickoff(inputs=...)` p
 | Local files and relative paths | Use absolute paths from env vars; never assume a file written by one run is there for the next |
 | Quotas, idempotency, audit records | Keep them in storage you own; claim daily quota under a lock or a transactional update |
 | External rate limits | Concurrent runs share them; wait on per-minute limits instead of failing |
-| Memory-heavy work | Give it its own deployment; stream or chunk large inputs; measure peak memory locally first |
+| Memory-heavy work | Stream or chunk large inputs; measure peak memory locally first |
 | `input()` | Never in a deployed crew; use `human_input=True` + `POST /resume`, or a Flow with `@human_feedback` |
 
 ---

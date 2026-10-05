@@ -10,6 +10,8 @@ Ship a crew or flow to AMP without burning deploys on project-shape errors, stal
 Verified against crewai 1.15.22 and 1.15.23 on 2026-10-01.
 Run `crewai version` first; if the major/minor differs, re-verify the version-sensitive rows below with the `ask-docs` skill before trusting them.
 
+Where the getting-started, design-agent or design-task skills in this plugin disagree with this skill, follow this skill - it was re-checked against crewai 1.15.22 and 1.15.23. The installed crewai source outranks both.
+
 ---
 
 ## 1. Preflight - run these three every time
@@ -61,7 +63,7 @@ class ReportFlow(Flow[ReportState]):
 
 
 def kickoff():
-    return ReportFlow().kickoff()
+    ReportFlow().kickoff()
 
 
 if __name__ == "__main__":
