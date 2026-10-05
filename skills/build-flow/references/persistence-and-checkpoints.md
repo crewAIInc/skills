@@ -12,7 +12,7 @@ Where flow state is saved, how to fork or resume it, how to plug in your own sto
 | Keyed by | `state.id` | A file per checkpoint under `location/<branch>/` |
 | Resume with | `kickoff(restore_from_state_id=sid)` | `kickoff(from_checkpoint=CheckpointConfig(restore_from=path))` |
 | Re-runs completed methods | Yes - the flow starts again from `@start` with the restored state | No - completed methods are skipped |
-| Use for | Carrying state across separate runs (counters, history, sessions) | Continuing one run after a crash |
+| Use for | Carrying state across separate runs (counters, history, sessions) | Continuing one run after a crash - only up to the first router (section 6) |
 
 Passing both `from_checkpoint` and `restore_from_state_id` raises `ValueError: Cannot combine ...`.
 
@@ -62,7 +62,7 @@ print(q.state.id != p.state.id)                             # True
 ```
 
 - `restore_from_state_id` is a **fork**: it loads the latest snapshot for that id, assigns a fresh `state.id`, then applies `inputs` on top.
-- `inputs={"id": sid}` is the deprecated **resume**: it loads the snapshot and keeps writing under the same id. It still works in 1.15.22 and 1.15.23 and emits no warning, which is why old code keeps using it. Per the docs, on a hosted deployment reusing an id merges executions (status, traces and list rows); the HTTP kickoff body uses a top-level `restoreFromStateId` next to `inputs` instead.
+- `inputs={"id": sid}` is the deprecated **resume**: it loads the snapshot and keeps writing under the same id. It still works in 1.15.22 and 1.15.23 and emits no warning, which is why old code keeps using it. Per the docs, on a hosted deployment reusing an id merges executions (status, traces and list rows); the HTTP kickoff body uses a top-level `restoreFromStateId` next to `inputs` instead. On CrewAI AMP (2026-10-01) `inputs.id` restored the state and kept the old `state.id`, while `restoreFromStateId` restored it under a new id equal to the new `kickoff_id`.
 - Both are silent when nothing is found: an unknown id logs a message and runs from defaults, and a class without `@persist` ignores `restore_from_state_id`.
 
 ---
@@ -159,6 +159,7 @@ print(Counter().kickoff(restore_from_state_id=a.state.id))   # 2
 
 ```python
 import glob
+import os
 from pydantic import BaseModel
 from crewai import CheckpointConfig
 from crewai.flow import Flow, listen, start
@@ -188,7 +189,9 @@ try:
 except RuntimeError:
     pass
 
-latest = sorted(glob.glob("./.checkpoints/**/*.json", recursive=True))[-1]
+# newest by mtime: file names carry a one-second timestamp plus a random id, so sorting names
+# can pick an older file when several methods finish in the same second
+latest = max(glob.glob("./.checkpoints/**/*.json", recursive=True), key=os.path.getmtime)
 
 # kickoff(from_checkpoint=...) replays with the saved state, so it fails again here.
 # To fix state first, restore, edit, then kick off:
@@ -198,6 +201,7 @@ print(flow.kickoff())   # "loaded 3" - extract() is skipped
 ```
 
 - Flows need `on_events=["method_execution_finished"]`; the default `["task_completed"]` wrote nothing for a flow, even when a method ran a crew.
+- This example has no router. Resume does not continue past a router: from a checkpoint taken after a `@router` (or a `@human_feedback` method with `emit`) finished, `kickoff()` runs nothing and returns the label (or `None`) with no error, so a failure downstream of a router cannot be resumed from the latest checkpoint. Reproduced on 1.15.22 and 1.15.23 with `a -> @router r -> left -> finish` (finish raising): resuming the checkpoint after `a` ran `left` and `finish`; the checkpoints after `r` and after `left` returned `'go_left'` and `None` and never ran `finish`.
 - `max_checkpoints=N` prunes old files. `provider=SqliteProvider()` (from `crewai.state`) stores them in one database file instead.
 - Inspect from the shell: `crewai checkpoint list ./.checkpoints`, `crewai checkpoint info <file>`.
 

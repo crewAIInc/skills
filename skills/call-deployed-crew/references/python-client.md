@@ -7,11 +7,14 @@ What it does, and why:
 | Behaviour | Prevents |
 |---|---|
 | `run()` calls `GET /inputs` first and refuses to kick off with a missing key | `422` round trips, and silent runs where `{placeholder}` text reaches the model |
-| Wraps values in `{"inputs": {...}}` and sends non-strings as JSON strings | the bare-body `400` / `422`; type surprises (the API documents input values as strings) |
+| Wraps values in `{"inputs": {...}}` and, for crews, sends non-strings as JSON strings | the bare-body `422`; type surprises (the API documents input values as strings) |
 | Long timeout on the first request, then the normal timeout | failing on a slow first response |
 | Retries `502` / `503` / `504` honoring `Retry-After`, and connection errors | giving up on a transient gateway error |
 | Never retries `POST /kickoff` after a read timeout, `502` or `504` | duplicate runs |
 | Reads `state`, then `status`, lower-cased; accepts both documented vocabularies | poll loops that never see `"completed"` |
+| Treats `state: "NOT FOUND"` (returned with HTTP 200) like a `404`, with a short grace | polling an unknown id until the deadline |
+| Gives up after a few `5xx` in a row on `/status`, pointing at the deployment logs | polling a broken run until the deadline with no useful error |
+| `run(..., flow=True)` for flows: no `/inputs` check, values keep their JSON types | refusing a flow kickoff over optional state fields; a flow run `FAILED` because a list field arrived as a string |
 | Reads `result_json`, then `result` / `result.output` | empty results |
 | Backoff with jitter under an overall deadline | unbounded polling |
 | Raises `RunFailed` / `RunPaused` / `RunTimeout` with `.kickoff_id` and `.payload` | losing the only handle to a run |
@@ -127,9 +130,18 @@ class DeployedCrew:
         resp = self._request("GET", "/inputs", retry_on_timeout=True)
         return list(self._json_or_raise(resp, "GET /inputs").get("inputs", []))
 
-    def kickoff(self, inputs: dict[str, Any], *, required: list[str] | None = None, **top_level: Any) -> str:
+    def kickoff(
+        self,
+        inputs: dict[str, Any],
+        *,
+        required: list[str] | None = None,
+        stringify: bool = True,
+        **top_level: Any,
+    ) -> str:
         """POST /kickoff with {"inputs": {...}}. Returns the kickoff_id.
 
+        stringify=False for a flow: its inputs are validated against the typed
+        state model, so a list must be sent as a JSON list, not a string.
         top_level: optional documented siblings of "inputs", e.g. meta=...,
         crewWebhookUrl=..., restoreFromStateId=... (flows).
         """
@@ -137,13 +149,10 @@ class DeployedCrew:
             missing = [k for k in required if k not in inputs]
             if missing:
                 raise MissingInputsError(f"missing required inputs: {missing}")
-        # The documented schema types every input value as a string.
-        body = {
-            "inputs": {
-                k: v if isinstance(v, str) else json.dumps(v) for k, v in inputs.items()
-            },
-            **top_level,
-        }
+        # The documented schema types every input value as a string (crews).
+        if stringify:
+            inputs = {k: v if isinstance(v, str) else json.dumps(v) for k, v in inputs.items()}
+        body = {"inputs": inputs, **top_level}
         resp = self._request("POST", "/kickoff", json=body, retry_on_timeout=False)
         data = self._json_or_raise(resp, "POST /kickoff")
         return data["kickoff_id"]
@@ -152,13 +161,18 @@ class DeployedCrew:
         resp = self._request("GET", f"/status/{kickoff_id}", retry_on_timeout=True)
         if resp.status_code == 404:
             return {"state": "not_found"}
+        if resp.status_code >= 500:
+            # Reported by wait(), which tolerates a few in a row before giving up.
+            return {"state": "server_error", "http_status": resp.status_code, "body": resp.text[:300]}
         return self._json_or_raise(resp, "GET /status", kickoff_id)
 
     @staticmethod
     def state_of(payload: dict[str, Any]) -> str:
-        # Platform guide: "state" (PENDING/RUNNING/SUCCESS/FAILED/PAUSED/...) and
-        # "status" is a message. API reference: "status" is running/completed/error.
-        return str(payload.get("state") or payload.get("status") or "").strip().lower()
+        # Live AMP: "state" is PENDING/STARTED/RUNNING/SUCCESS/FAILED, or "NOT FOUND"
+        # (HTTP 200) for an id the deployment does not know; "status" is a message.
+        # API reference: "status" is running/completed/error.
+        state = str(payload.get("state") or payload.get("status") or "").strip().lower()
+        return "not_found" if state in {"not found", "not_found"} else state
 
     @staticmethod
     def result_of(payload: dict[str, Any]) -> Any:
@@ -177,11 +191,12 @@ class DeployedCrew:
         first_interval: float = 2.0,
         max_interval: float = 15.0,
         not_found_grace: int = 3,
+        server_error_grace: int = 3,
     ) -> dict[str, Any]:
         """Poll GET /status/{kickoff_id} until a terminal state or the deadline."""
         deadline = time.monotonic() + deadline_s
         interval = first_interval
-        not_found = 0
+        not_found = server_errors = 0
         while True:
             payload = self.status(kickoff_id)
             state = self.state_of(payload)
@@ -195,7 +210,14 @@ class DeployedCrew:
             if state == "not_found":
                 not_found += 1
                 if not_found > not_found_grace:
-                    raise DeployedCrewError(f"kickoff_id {kickoff_id} not found", kickoff_id)
+                    raise DeployedCrewError(
+                        f"kickoff_id {kickoff_id} not found (wrong deployment URL, or a crew "
+                        "waiting for human input)", kickoff_id, payload)
+            server_errors = server_errors + 1 if state == "server_error" else 0
+            if server_errors > server_error_grace:
+                raise DeployedCrewError(
+                    f"GET /status/{kickoff_id} keeps returning HTTP {payload.get('http_status')}; "
+                    "the run itself may have failed - check the deployment's logs", kickoff_id, payload)
             remaining = deadline - time.monotonic()
             if remaining <= 0:
                 raise RunTimeout(
@@ -205,10 +227,16 @@ class DeployedCrew:
             time.sleep(min(interval * random.uniform(0.8, 1.2), remaining))
             interval = min(interval * 1.5, max_interval)
 
-    def run(self, inputs: dict[str, Any], **wait_kw: Any) -> Any:
-        """Validate against /inputs, kick off, wait, return the result."""
+    def run(self, inputs: dict[str, Any], *, flow: bool = False, **wait_kw: Any) -> Any:
+        """Validate against /inputs, kick off, wait, return the result.
+
+        flow=True: a flow's /inputs lists every state field (including "id") and none
+        is required, and its values must keep their JSON types - so skip both.
+        """
         required = self.get_inputs()  # also absorbs a slow first response, safely
-        kickoff_id = self.kickoff(inputs, required=required)
+        kickoff_id = self.kickoff(
+            inputs, required=None if flow else required, stringify=not flow
+        )
         return self.result_of(self.wait(kickoff_id, **wait_kw))
 
     def close(self) -> None:
@@ -273,34 +301,41 @@ AUTH="Authorization: Bearer $CREWAI_DEPLOYMENT_TOKEN"
 DEADLINE_S="${DEADLINE_S:-900}"
 DEFAULT_INPUTS='{"topic": "AI agents", "audience": "engineers"}'
 INPUTS_JSON="${1:-$DEFAULT_INPUTS}"
+FLOW="${FLOW:-0}"   # FLOW=1: no required-key check, values keep their JSON types
 
 # 1. Required keys (read-only: safe to retry, long timeout for a slow first call)
 required=$(curl -sS --fail --max-time 180 --retry 4 --retry-connrefused \
   -H "$AUTH" "$CREWAI_DEPLOYMENT_URL/inputs" | jq -c '.inputs')
 missing=$(jq -nc --argjson req "$required" --argjson got "$INPUTS_JSON" '$req - ($got | keys)')
-[ "$missing" = "[]" ] || { echo "missing inputs: $missing" >&2; exit 2; }
+[ "$FLOW" = 1 ] || [ "$missing" = "[]" ] || { echo "missing inputs: $missing" >&2; exit 2; }
 
 # 2. Kickoff: wrap in {"inputs": ...}; no retry on timeout (it may have started)
-kickoff_id=$(jq -nc --argjson i "$INPUTS_JSON" '{inputs: ($i | map_values(tostring))}' |
+kickoff_id=$(jq -nc --argjson i "$INPUTS_JSON" --arg flow "$FLOW" \
+    '{inputs: (if $flow == "1" then $i else ($i | map_values(tostring)) end)}' |
   curl -sS --fail-with-body --max-time 60 -X POST "$CREWAI_DEPLOYMENT_URL/kickoff" \
     -H "$AUTH" -H "Content-Type: application/json" --data @- | jq -r '.kickoff_id')
 echo "kickoff_id=$kickoff_id" >&2
 
 # 3. Poll with backoff under an overall deadline
-end=$(( $(date +%s) + DEADLINE_S )); sleep_s=2
+end=$(( $(date +%s) + DEADLINE_S )); sleep_s=2; misses=0
 while :; do
   body=$(curl -sS --max-time 30 --retry 3 -H "$AUTH" "$CREWAI_DEPLOYMENT_URL/status/$kickoff_id")
-  state=$(jq -r '(.state // .status // "") | ascii_downcase' <<<"$body")
+  state=$(jq -r '(.state // .status // "") | ascii_downcase' <<<"$body" 2>/dev/null || echo "non-json")
   case "$state" in
     success|completed) jq -r '.result_json // (.result | if type == "object" then .output else . end)' <<<"$body"; exit 0 ;;
     failed|failure|error|revoked) echo "run $kickoff_id ended $state: $(jq -c '.error // .status' <<<"$body")" >&2; exit 1 ;;
     paused) echo "run $kickoff_id is waiting for human feedback (POST /resume)" >&2; exit 3 ;;
+    "not found"|non-json) misses=$((misses + 1))
+      [ "$misses" -le 3 ] || { echo "run $kickoff_id: $state on every poll (wrong URL, HITL wait, or a failed run - check the logs)" >&2; exit 5; } ;;
+    *) misses=0 ;;
   esac
   [ "$(date +%s)" -lt "$end" ] || { echo "deadline passed; run $kickoff_id may still be going (last: $state)" >&2; exit 4; }
   sleep "$sleep_s"; sleep_s=$(( sleep_s < 15 ? sleep_s * 3 / 2 + 1 : 15 ))
 done
 ```
 
-Exit codes: `0` success (result on stdout), `1` run failed, `2` missing inputs, `3` paused for human feedback, `4` deadline passed (the run may still be going), anything else is a curl error such as `22` for an HTTP error status.
+Exit codes: `0` success (result on stdout), `1` run failed, `2` missing inputs, `3` paused for human feedback, `4` deadline passed (the run may still be going), `5` the id stayed `NOT FOUND` or `/status` kept returning a non-JSON error; anything else is a curl error for an HTTP error status - `22`, or `56` with curl 8.x over HTTP/2 (a wrong token gave `56` live).
+
+For a flow, run it with `FLOW=1`: a flow's `/inputs` lists every state field (none required), and its inputs are validated against the typed state - live, `"history": "[]"` made the run `FAILED` (`Input should be a valid list`) while `"history": ["a"]` worked. Never send `id` (an empty one is rejected with `422 "'inputs.id' must be a valid UUID when provided"`).
 
 `curl --retry` retries timeouts and `408` / `429` / `500` / `502` / `503` / `504` and honors `Retry-After`; it is used only on the read-only calls. The kickoff call has no `--retry`.

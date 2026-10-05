@@ -1,6 +1,8 @@
 # CrewAI Tools Catalog
 
-Quick reference for all built-in tools. All imports from `crewai_tools` unless noted.
+Quick reference for common built-in tools. All imports from `crewai_tools` unless noted. Every name below was checked by import against crewai-tools 1.15.23 on 2026-10-01; for the full list of 118 exported names and the names models invent, see the **connect-tools-and-mcp** skill.
+
+Some tools need an extra before they construct: `EXASearchTool`, `TavilySearchTool`, `Firecrawl*` and `SeleniumScrapingTool` otherwise show an interactive "install the package?" prompt that blocks scripts and CI - install `crewai-tools[exa-py]`, `[tavily-python]`, `[firecrawl-py]`, `[selenium]` first. The RAG `*SearchTool`s build an embedder at construction (OpenAI by default).
 
 > **Prefer official MCP servers over native tools when available.** Official MCP servers are maintained by the service providers and stay up to date automatically. See [MCP Servers Reference](mcp-servers.md) for the full guide. Fall back to the native tools below only when no official MCP server exists for the service you need.
 
@@ -17,24 +19,24 @@ Quick reference for all built-in tools. All imports from `crewai_tools` unless n
 | `TavilyExtractorTool` | Extract structured content from URLs | `TAVILY_API_KEY` | `from crewai_tools import TavilyExtractorTool` |
 | `SerpApiGoogleSearchTool` | Google search via SerpApi | `SERPAPI_API_KEY` | `from crewai_tools import SerpApiGoogleSearchTool` |
 | `SerpApiGoogleShoppingTool` | Google Shopping search | `SERPAPI_API_KEY` | `from crewai_tools import SerpApiGoogleShoppingTool` |
-| `LinkupSearchTool` | Contextual search via Linkup | — | `from crewai_tools import LinkupSearchTool` |
-| `ArxivPaperTool` | Search arXiv for academic papers | — | `from crewai_tools import ArxivPaperTool` |
+| `LinkupSearchTool` | Contextual search via Linkup | `LINKUP_API_KEY` | `from crewai_tools import LinkupSearchTool` |
+| `ArxivPaperTool` | Search arXiv for academic papers | - | `from crewai_tools import ArxivPaperTool` |
 | `GithubSearchTool` | RAG search in GitHub repos | `gh_token` param | `from crewai_tools import GithubSearchTool` |
-| `CodeDocsSearchTool` | RAG search in code documentation | — | `from crewai_tools import CodeDocsSearchTool` |
+| `CodeDocsSearchTool` | RAG search in code documentation | - | `from crewai_tools import CodeDocsSearchTool` |
 
 ## Web Scraping
 
 | Tool | Purpose | Env Var | Import |
 |---|---|---|---|
-| `ScrapeWebsiteTool` | Extract website content via HTTP | — | `from crewai_tools import ScrapeWebsiteTool` |
-| `ScrapeElementFromWebsiteTool` | Scrape specific HTML elements via CSS selectors | — | `from crewai_tools import ScrapeElementFromWebsiteTool` |
-| `SeleniumScrapingTool` | Scrape dynamic JS-rendered content | — | `from crewai_tools import SeleniumScrapingTool` |
+| `ScrapeWebsiteTool` | Extract website content via HTTP | - | `from crewai_tools import ScrapeWebsiteTool` |
+| `ScrapeElementFromWebsiteTool` | Scrape specific HTML elements via CSS selectors | - | `from crewai_tools import ScrapeElementFromWebsiteTool` |
+| `SeleniumScrapingTool` | Scrape dynamic JS-rendered content | - | `from crewai_tools import SeleniumScrapingTool` |
 | `FirecrawlScrapeWebsiteTool` | High-performance scraping | `FIRECRAWL_API_KEY` | `from crewai_tools import FirecrawlScrapeWebsiteTool` |
 | `FirecrawlCrawlWebsiteTool` | Crawl entire websites | `FIRECRAWL_API_KEY` | `from crewai_tools import FirecrawlCrawlWebsiteTool` |
 | `FirecrawlSearchTool` | Search + extract with Firecrawl | `FIRECRAWL_API_KEY` | `from crewai_tools import FirecrawlSearchTool` |
-| `SpiderTool` | Comprehensive web crawling | — | `from crewai_tools import SpiderTool` |
+| `SpiderTool` | Comprehensive web crawling | `SPIDER_API_KEY` | `from crewai_tools import SpiderTool` |
 | `BrowserbaseLoadTool` | Cloud browser automation | `BROWSERBASE_API_KEY` | `from crewai_tools import BrowserbaseLoadTool` |
-| `StagehandTool` | Natural language browser automation | — | `from crewai_tools import StagehandTool` |
+| `StagehandTool` | Natural language browser automation | `BROWSERBASE_API_KEY` + a model key; needs `uv add stagehand` | `from crewai_tools import StagehandTool` |
 
 ## File & Document
 
@@ -45,23 +47,21 @@ Quick reference for all built-in tools. All imports from `crewai_tools` unless n
 | `DirectoryReadTool` | List directory contents | `from crewai_tools import DirectoryReadTool` |
 | `DirectorySearchTool` | RAG search within directories | `from crewai_tools import DirectorySearchTool` |
 | `PDFSearchTool` | RAG search within PDFs | `from crewai_tools import PDFSearchTool` |
-| `PDFTextWritingTool` | Write text at coordinates in PDFs | `from crewai_tools import PDFTextWritingTool` |
 | `DOCXSearchTool` | RAG search within Word docs | `from crewai_tools import DOCXSearchTool` |
 | `CSVSearchTool` | RAG search within CSV files | `from crewai_tools import CSVSearchTool` |
 | `JSONSearchTool` | RAG search within JSON files | `from crewai_tools import JSONSearchTool` |
 | `XMLSearchTool` | RAG search within XML files | `from crewai_tools import XMLSearchTool` |
 | `MDXSearchTool` | RAG search within Markdown files | `from crewai_tools import MDXSearchTool` |
 | `TXTSearchTool` | RAG search within text files | `from crewai_tools import TXTSearchTool` |
-| `OCRTool` | Extract text from images via vision LLM | `from crewai_tools import OCRTool` |
+| `OCRTool` | Extract text from images via vision LLM (default `gpt-4o`; pass `llm=` to change) | `from crewai_tools import OCRTool` |
 
 ## Database
 
 | Tool | Purpose | Dependencies | Import |
 |---|---|---|---|
 | `NL2SQLTool` | Natural language to SQL | SQLAlchemy + driver | `from crewai_tools import NL2SQLTool` |
-| `PGSearchTool` | RAG search in PostgreSQL | — | `from crewai_tools import PGSearchTool` |
-| `MySQLSearchTool` | RAG search in MySQL | — | `from crewai_tools import MySQLSearchTool` |
-| `DatabricksQueryTool` | SQL queries on Databricks | — | `from crewai_tools import DatabricksQueryTool` |
+| `MySQLSearchTool` | RAG search in MySQL | - | `from crewai_tools import MySQLSearchTool` |
+| `DatabricksQueryTool` | SQL queries on Databricks | - | `from crewai_tools import DatabricksQueryTool` |
 | `SnowflakeSearchTool` | SQL queries on Snowflake | snowflake-connector | `from crewai_tools import SnowflakeSearchTool` |
 | `SingleStoreSearchTool` | SELECT queries on SingleStore | crewai-tools[singlestore] | `from crewai_tools import SingleStoreSearchTool` |
 
@@ -79,8 +79,8 @@ Quick reference for all built-in tools. All imports from `crewai_tools` unless n
 |---|---|---|---|
 | `DallETool` | Generate images with DALL-E | `OPENAI_API_KEY` | `from crewai_tools import DallETool` |
 | `VisionTool` | Extract text from images | `OPENAI_API_KEY` | `from crewai_tools import VisionTool` |
-| `CodeInterpreterTool` | Execute Python in Docker sandbox | Docker required | `from crewai_tools import CodeInterpreterTool` |
-| `RagTool` | General-purpose RAG for any data source | — | `from crewai_tools import RagTool` |
+| `E2BPythonTool` / `DaytonaPythonTool` | Execute Python in a hosted sandbox (`CodeInterpreterTool` was removed) | E2B / Daytona account | `from crewai_tools import E2BPythonTool` |
+| `RagTool` | General-purpose RAG for any data source | - | `from crewai_tools import RagTool` |
 | `LlamaIndexTool` | Wrap LlamaIndex tools/query engines | llama-index | `from crewai_tools import LlamaIndexTool` |
 
 ## Cloud & AWS
@@ -89,7 +89,7 @@ Quick reference for all built-in tools. All imports from `crewai_tools` unless n
 |---|---|---|---|
 | `S3ReaderTool` | Read files from S3 | `CREW_AWS_*` | `from crewai_tools.aws.s3 import S3ReaderTool` |
 | `S3WriterTool` | Write files to S3 | `CREW_AWS_*` | `from crewai_tools.aws.s3 import S3WriterTool` |
-| `BedrockKBRetriever` | Query Bedrock knowledge bases | AWS creds | `from crewai_tools import BedrockKBRetriever` |
+| `BedrockKBRetrieverTool` | Query Bedrock knowledge bases | AWS creds | `from crewai_tools import BedrockKBRetrieverTool` |
 | `BedrockInvokeAgentTool` | Call Bedrock Agents | AWS creds | `from crewai_tools.aws.bedrock.agents.invoke_agent_tool import BedrockInvokeAgentTool` |
 
 ## YouTube
@@ -104,11 +104,11 @@ Quick reference for all built-in tools. All imports from `crewai_tools` unless n
 | Tool | Purpose | Env Var | Import |
 |---|---|---|---|
 | `ApifyActorsTool` | Run Apify web scraping actors | `APIFY_API_TOKEN` | `from crewai_tools import ApifyActorsTool` |
-| `ComposioToolSet` | 250+ tools via Composio platform | `COMPOSIO_API_KEY` | `from composio_crewai import ComposioProvider` |
-| `MultiOnTool` | Browser workflow automation | — | `from crewai_tools import MultiOnTool` |
+| `ComposioTool` | Tools via the Composio platform | `COMPOSIO_API_KEY` | `from crewai_tools import ComposioTool` |
+| `MultiOnTool` | Browser workflow automation | `MULTION_API_KEY` | `from crewai_tools import MultiOnTool` |
 | `ZapierActionsAdapter` | Zapier actions as CrewAI tools | `ZAPIER_API_KEY` | `from crewai_tools.adapters.zapier_adapter import ZapierActionsAdapter` |
 | `MergeAgentHandlerTool` | 250+ tools via Merge unified API | `AGENT_HANDLER_API_KEY` | `from crewai_tools import MergeAgentHandlerTool` |
-| `InvokeCrewAIAutomationTool` | Invoke CrewAI Platform automations | `CREWAI_API_URL` | `from crewai_tools import InvokeCrewAIAutomationTool` |
+| `InvokeCrewAIAutomationTool` | Invoke CrewAI AMP automations | constructor args `crew_api_url`, `crew_bearer_token`, `crew_name`, `crew_description` | `from crewai_tools import InvokeCrewAIAutomationTool` |
 
 ---
 

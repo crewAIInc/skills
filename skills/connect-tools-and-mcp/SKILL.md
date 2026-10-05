@@ -1,6 +1,6 @@
 ---
 name: connect-tools-and-mcp
-description: "Giving crewAI agents tools and MCP servers on crewai 1.15.x: custom BaseTool with args_schema and @tool, which crewai_tools names really exist, tool caching, max_usage_count, ToolFailure, Agent(mcps=[...]) string and MCPServerStdio/HTTP/SSE forms, rewritten MCP tool names, MCPServerAdapter, timeouts, and what works on a hosted deployment. Use when writing or debugging a tool or MCP connection, when you see 'cannot import name BaseTool from crewai_tools', 'You are missing the mcp package', 'MCPConnectionError', 'Operation timed out after 30 seconds', 'reached its usage limit', an agent that never calls an MCP tool, mcps=[...] that yields no tools, or a stdio MCP server that works locally but not after deploy."
+description: "Giving crewAI agents tools and MCP servers on crewai 1.15.x: custom BaseTool with args_schema and @tool, which crewai_tools names really exist, tool caching, max_usage_count, ToolFailure, Agent(mcps=[...]) string and MCPServerStdio/HTTP/SSE forms, rewritten MCP tool names, MCPServerAdapter, timeouts, and what works on a hosted deployment. Use when writing or debugging a tool or MCP connection, when you see 'cannot import name BaseTool from crewai_tools', 'You are missing the mcp package', 'MCPConnectionError', 'Operation timed out after 30 seconds', 'reached its usage limit', 'Invalid MCP reference', 'Anthropic function name ... must start with a letter', an agent that never calls an MCP tool, mcps=[...] that yields no tools (for example an https:// string under akickoff or on CrewAI AMP), or a stdio MCP server that works locally but not after deploy."
 ---
 
 # Connect Tools and MCP Servers to CrewAI Agents
@@ -8,6 +8,7 @@ description: "Giving crewAI agents tools and MCP servers on crewai 1.15.x: custo
 Give an agent working tools - custom Python, prebuilt `crewai_tools`, or MCP servers - without the 0.x-era mistakes that fail silently.
 
 Verified against crewai 1.15.22 and 1.15.23 on 2026-10-01.
+Live-tested on CrewAI AMP and real LLMs on 2026-10-01.
 Run `crewai version` first; if the major/minor differs from 1.15, re-verify version-sensitive rows with the `ask-docs` skill before trusting them.
 
 Where the getting-started, design-agent or design-task skills in this plugin disagree with this skill, follow this skill - it was re-checked against crewai 1.15.22 and 1.15.23. The installed crewai source outranks both.
@@ -21,8 +22,8 @@ Where the getting-started, design-agent or design-task skills in this plugin dis
 | A quick Python function as a tool | `@tool` from `crewai.tools` | 3 |
 | A tool with config, state, or a documented input schema | `BaseTool` subclass with `args_schema` | 3 |
 | A prebuilt search/scrape/file tool | `crewai_tools` - but import it once to prove the name exists | 5 |
-| A remote MCP server | `Agent(mcps=[MCPServerHTTP(...)])` (or an `https://` string) | 6 |
-| A local MCP server during development | `Agent(mcps=[MCPServerStdio(...)])` | 6, 10 |
+| A remote MCP server | `Agent(mcps=[MCPServerHTTP(...)])` - not an `https://` string if the crew is deployed or uses `akickoff()` | 6, 8 |
+| An MCP server that ships with your code | `Agent(mcps=[MCPServerStdio(...)])` - also works on CrewAI AMP when the server is in the package | 6, 10 |
 | An integration connected in your CrewAI AMP account | `mcps=["<slug>"]` or `"<slug>#<tool>"` | 6 |
 | Bare MCP tool names or a manual start/stop lifecycle | `MCPServerAdapter` (needs `crewai-tools[mcp]`) | 9 |
 
@@ -86,7 +87,7 @@ Rules that prevent real failures:
 | Put async code in `async def _run(...)` | Agents execute tools through `_run` in both `kickoff()` and `akickoff()`; an `_arun` override is only used when you call `tool.arun()` yourself |
 | Give `@tool` functions a docstring | `ValueError: Function must have a docstring` at decoration time |
 | Write the description for the LLM: what it does and when to use it | The agent picks tools by description; MCP tools in particular have opaque names (section 7) |
-| Expect the displayed name to be sanitized | `@tool("Unit Converter")` is offered to the LLM as `unit_converter` |
+| Expect the displayed name to be sanitized | `@tool("Unit Converter")` is offered to the LLM as `unit_converter` (seen in a live run with claude-haiku-4-5) |
 | Return a `ToolFailure` instead of an error string | An error string looks like data; a `ToolFailure` is recorded in `TaskOutput.tool_failures` and can abort the run (below) |
 
 Per-tool options (all on `BaseTool` and accepted by `@tool(...)` where noted):
@@ -133,7 +134,7 @@ crewai-tools 1.15.22-1.15.23 exports 118 names. Import a tool before you write c
 | `PDFTextWritingTool`, `PGSearchTool` | none |
 | `WikipediaTool`, `PythonREPLTool`, `ShellTool`, `CalculatorTool`, `HumanTool`, `LangChainTool`, `SeleniumTool` | none (`SeleniumScrapingTool` exists) - write a custom tool |
 
-Many tools need a third-party package. When it is missing, constructing the tool asks `You are missing the '<pkg>' package. Would you like to install it? [y/N]` (verified for `EXASearchTool`, `TavilySearchTool`, `FirecrawlSearchTool`, `SeleniumScrapingTool`). With a terminal attached that blocks forever; with stdin closed it raises `click.exceptions.Abort`. Install the extra up front, e.g. `uv add "crewai-tools[exa-py]"`. RAG tools (`WebsiteSearchTool`, `PDFSearchTool`, ...) fail at construction without an embedder key. Full list and extras: [references/crewai-tools-names.md](references/crewai-tools-names.md).
+Many tools need a third-party package. When it is missing, constructing the tool asks `You are missing the '<pkg>' package. Would you like to install it? [y/N]` (verified for `EXASearchTool`, `TavilySearchTool`, `FirecrawlSearchTool`, `SeleniumScrapingTool`). With a terminal attached that blocks forever; with stdin closed it raises `click.exceptions.Abort`. Install the extra up front, e.g. `uv add "crewai-tools[exa-py]"`. Prebuilt tools are offered to the LLM under their sanitized display name, not the class name: `DirectoryReadTool` appears as `list_files_in_directory`, `FileReadTool` as `read_a_files_content`. RAG tools (`WebsiteSearchTool`, `PDFSearchTool`, ...) fail at construction without an embedder key. Full list and extras: [references/crewai-tools-names.md](references/crewai-tools-names.md).
 
 ---
 
@@ -153,24 +154,25 @@ agent = Agent(
         MCPServerSSE(url="https://legacy.example.com/sse"),
         MCPServerStdio(command="uvx", args=["mcp-server-time"],
                        tool_filter=create_static_tool_filter(allowed_tool_names=["get_current_time"])),
-        "https://docs.example.com/mcp#search_docs",   # https string, one tool
+        "https://docs.example.com/mcp#search_docs",   # https string, one tool (sync kickoff only - section 8)
         "acme#lookup_stock",                           # AMP-connected integration, one tool
         "acme#list_warehouses",                        # second tool = second ref
     ],
 )
 ```
 
-Nothing connects at construction. Tools are discovered when a task runs.
+String refs are validated at construction; nothing connects until a task runs.
 
 | Form | Rule (all verified) |
 |---|---|
 | `MCPServerStdio(command, args, env, tool_filter, cache_tools_list)` | Spawns a subprocess where the crew runs. The server does **not** inherit your environment: it gets only `HOME, LOGNAME, PATH, SHELL, TERM, USER` plus `env=`, so pass its API keys in `env` explicitly. No `cwd` or timeout field |
-| `MCPServerHTTP(url, headers, streamable=True, tool_filter, cache_tools_list)` | Streamable HTTP; `http://` and `https://` both work |
+| `MCPServerHTTP(url, headers, streamable=True, tool_filter, cache_tools_list)` | Streamable HTTP; `http://` and `https://` both work. Use a hostname, not an IP: `http://127.0.0.1:8765/mcp` makes tool names start with a digit and Anthropic models reject them (`ValueError: Anthropic function name '127_0_0_1_8765_mcp_lookup_stock' must start with a letter or underscore`); `http://localhost:8765/mcp` works |
 | `MCPServerSSE(url, headers, tool_filter, cache_tools_list)` | Legacy SSE servers (usually a `/sse` path) |
-| `"https://host/path"` string | Must start with `https://`. Optional `#tool` keeps one tool |
-| `"slug"` / `"slug#tool"` string | An integration connected in a CrewAI AMP account; legacy `"crewai-amp:slug"` also works |
-| Any other string, e.g. `"http://localhost:8000/mcp"` | Treated as an AMP slug: zero tools, no error. Use `MCPServerHTTP` for `http://` |
-| `"slug#a,b"` or `"https://...#a,b"` | Selects **zero** tools (`#` takes one name). Use one ref per tool |
+| `"https://host/path"` string | Must start with `https://`. Optional `#tool` keeps one tool. Resolves to **zero tools, silently,** inside a running event loop - `await crew.akickoff()` and crews deployed on CrewAI AMP (section 8) |
+| `"slug"` / `"slug#tool"` string | An integration connected in a CrewAI AMP account; legacy `"crewai-amp:slug"` also works. A slug the account has not connected gives zero tools and the run continues (seen on AMP) |
+| `"http://localhost:8000/mcp"` or any string that is neither `https://` nor a slug | `ValidationError: ... Invalid MCP reference: 'http://...'. String references must be an 'https://' URL or a valid slug` when the Agent is built. Use `MCPServerHTTP` for `http://` |
+| `"slug#a,b"` | Same `Invalid MCP reference` ValidationError. One ref per tool |
+| `"https://...#a,b"` | Accepted, but selects **zero** tools (`#` takes one name). One ref per tool |
 | `tool_filter` names | Matched against the **sanitized** tool name: a server tool `getForecast` must be listed as `get_forecast` |
 
 Full examples for each transport, dynamic filters and the AMP form: [references/mcp-connections.md](references/mcp-connections.md).
@@ -184,13 +186,14 @@ Native MCP tools are offered to the LLM as `<server name>_<tool name>`, then san
 | Source | Name the LLM sees for tool `lookup_stock` |
 |---|---|
 | `MCPServerStdio(command="python", args=["servers/inventory.py"])` | `python_servers_inventory_py_lookup_stock` |
-| `MCPServerStdio` with absolute paths, e.g. `/opt/app/.venv/bin/python` + `/opt/app/servers/inventory_server.py` | `opt_app_venv_bin_python_opt_app_servers_inventory_serve_a87662e9` - over 64 chars, so it is truncated and hashed and the tool name is gone |
+| `MCPServerStdio` with absolute paths, e.g. `/opt/app/.venv/bin/python` + `/opt/app/servers/inventory_server.py` | `opt_app_venv_bin_python_opt_app_servers_inventory_serve_a87662e9` - over 64 chars, so it is truncated and hashed and the tool name is gone. `command=sys.executable` does the same, locally and on AMP |
+| `MCPServerHTTP(url="http://localhost:8765/mcp")` | `localhost_8765_mcp_lookup_stock` (an IP host would start the name with a digit - section 6) |
 | `MCPServerHTTP(url="https://mcp.example.com/mcp")` or the same `https://` string | `mcp_example_com_mcp_lookup_stock` |
 | `"acme#lookup_stock"` (AMP) | built from the server URL the account returns, not from `acme` - only the `_lookup_stock` suffix is stable |
 | `MCPServerAdapter` | `lookup_stock` (bare) |
 
 Consequences:
-- Do not write "call the `lookup_stock` tool" in a task description or backstory. Describe the capability ("check stock levels with the inventory tool"), or derive the exact name at runtime.
+- Do not write "call the `lookup_stock` tool" in a task description or backstory. Describe the capability ("check stock levels with the inventory tool"), or derive the exact name at runtime. A native function-calling model usually copes (claude-haiku-4-5 told "call the lookup_stock tool" called `python_mcp_server_py_lookup_stock`), but a model on the text ReAct path fails with `Action 'lookup_stock' don't exist`, and a hashed name leaves only the description to go on.
 - Keep stdio `command`/`args` short (`"uvx"`, `"npx"`, a relative script path) so names stay readable and under 64 characters. Absolute paths also put your filesystem layout into every prompt.
 - In code, identify a resolved native MCP tool by `tool.original_tool_name`, not by `tool.name`.
 
@@ -200,13 +203,14 @@ Consequences:
 
 | Path | Connect | Per tool call | Retries | When the server is down |
 |---|---|---|---|---|
-| `MCPServerStdio/HTTP/SSE` config and AMP slugs | 30 s | 30 s | 3 attempts on timeout - **the tool runs again each time** (a 35 s tool ran 3 times, ~96 s, then `RuntimeError: ... Operation timed out after 30 seconds`) | kickoff raises `MCPConnectionError` |
+| `MCPServerStdio/HTTP/SSE` config and AMP slugs | 30 s | 30 s | 3 attempts on timeout - **the tool runs again each time**. Live run: a 35 s tool ran 3 times (~99 s); the agent got `Error executing tool: Error executing MCP tool slow_report: Operation timed out after 30 seconds` as its observation, a tool failure was recorded and the crew finished. A direct `tool.run()` raises `RuntimeError` instead | kickoff raises `MCPConnectionError` |
 | `"https://..."` string | 10 s, 15 s discovery | 60 s | 3 attempts (a 65 s tool ran 3 times, ~198 s) and then returns the error **as a string** | agent runs with **no MCP tools**, no error |
 | `MCPServerAdapter` | `connect_timeout=` (default 30) | no crewai timeout (a 35 s call completed) | none | constructor raises `RuntimeError: Failed to initialize MCP Adapter` |
 
 In 1.15.22-1.15.23 the native timeouts are module constants. No field on `MCPServerStdio`, `MCPServerHTTP`, `MCPServerSSE` or `Agent` changes them. So:
 - Keep MCP tool calls well under 30 s. Make them idempotent, because a timed-out call is re-sent. For long jobs, return a job id from one tool and poll with another.
 - Prefer config objects to `https://` strings in production: they fail loudly at kickoff instead of silently dropping tools.
+- `https://` strings discover tools with `asyncio.run()`. Inside a running event loop that fails and the agent gets **zero tools with no error** (only `RuntimeWarning: coroutine 'MCPToolResolver._get_mcp_tool_schemas_async' was never awaited`). Seen live with `await crew.akickoff()` and on a CrewAI AMP deployment - the model then invented tool calls in its answer while the run reported SUCCESS. The same server as `MCPServerHTTP(url=...)` worked in both places. Sync `crew.kickoff()`, including from a sync Flow step, resolves strings fine.
 - An MCP result with `isError: true` reaches the agent as text. It is recorded as a `mcp_error` tool failure, and `tool_failure_policy="raise"` turns it into `ToolExecutionFailedError`.
 
 ---
@@ -231,12 +235,30 @@ In a `@CrewBase` class, set `mcp_server_params` (and optionally `mcp_connect_tim
 
 ---
 
-## 10. Hosted deployments: stdio vs HTTP
+## 10. Hosted deployments: what works on CrewAI AMP
 
-- A stdio server is a child process of the crew. On a hosted deployment (CrewAI AMP or any container), the crew runs remotely. A stdio server on your laptop is unreachable, and the command and every file it needs must exist inside the deployed image.
-- For anything deployed, run the MCP server as a service and connect with `MCPServerHTTP(url="https://<host>/mcp")` (or `MCPServerSSE`). Point deployments at a stable hostname you control, require auth on it, and do not leave temporary tunnels running.
-- Health check: a bare `curl -s -o /dev/null -w "%{http_code}" https://<host>/mcp` returns **406** from a healthy streamable-HTTP MCP endpoint. **404** means wrong path; `000`/connection refused means it is down.
-- Put tokens in `headers` read from environment variables (`os.environ["ACME_MCP_TOKEN"]`), never in the URL string or in code.
+Measured on a CrewAI AMP deployment (ZIP deploy, crewai 1.15.23, `anthropic/claude-haiku-4-5`), one kickoff per form:
+
+| Form in the deployed crew | Result |
+|---|---|
+| `MCPServerHTTP(url="https://<public host>/mcp")` | Works - the model called `<host>_mcp_<tool>` |
+| `"https://<public host>/mcp#tool"` string | **Zero tools, run SUCCESS** - the model made up a tool call in its answer (section 8) |
+| `MCPServerStdio(command="python", args=["-m", "<pkg>.inv_server"])`, server module inside `src/<pkg>/` | Works - a stdio server shipped in the package runs inside the deployment |
+| Same with `command=sys.executable` | Works (tool name hashed, section 7) |
+| `MCPServerStdio(..., env={"X": os.environ["X"]})` with `X` a deployment env var | Server sees `X`; without `env=` it does not |
+| `MCPServerAdapter(StdioServerParameters(...))` with `crewai-tools[mcp]` in `pyproject.toml` | Works, bare tool names |
+| `MCPServerStdio` pointing at a file that is not in the deployment (a laptop path) | Run fails with `MCPConnectionError` |
+| `MCPServerStdio(command="npx", ...)` | Run fails the same way - the deployment only has what your Python project installs |
+| `MCPServerHTTP` at a wrong path (HTTP 404) | Run fails the same way |
+| `"<slug>#tool"` not connected in the account | Zero tools, run SUCCESS |
+
+How a failed MCP connection looks from the API: for each `MCPConnectionError` run above, `GET /status/{kickoff_id}` answered **HTTP 500 `Internal Server Error`** (plain text) on every poll, minutes later too, instead of a JSON `FAILED` state. A plain exception in the same crew gave the documented shape: `{"state": "FAILED", "status": "ValueError: ..."}`. Treat a persistent 500 from `/status` as "the run failed", and check the MCP connection first.
+
+Rules:
+- A stdio server runs as a child process wherever the crew runs. Ship it inside the package (`src/<pkg>/server.py`, started with `python -m <pkg>.server`) and its Python dependencies in `pyproject.toml`/`uv.lock`; a laptop path or a Node/npx server is not there.
+- For remote servers use `MCPServerHTTP(url="https://<host>/mcp")` (or `MCPServerSSE`), never an `https://` string. Point deployments at a stable hostname you control, require auth on it, and do not leave temporary tunnels running.
+- Health check: a bare `curl -s -o /dev/null -w "%{http_code}" https://<host>/mcp` returns **406** from a healthy streamable-HTTP MCP endpoint (seen on a public server and locally). **404** means wrong path; `000`/connection refused means it is down.
+- Put tokens in `headers` read from environment variables (`os.environ["ACME_MCP_TOKEN"]`), never in the URL string or in code. A stdio server gets deployment env vars only through `env=`.
 
 ---
 
@@ -247,8 +269,12 @@ In a `@CrewBase` class, set `mcp_server_params` (and optionally `mcp_connect_tim
 | `cannot import name 'BaseTool' from 'crewai_tools'` | 0.x import path | `from crewai.tools import BaseTool, tool` |
 | `Can't instantiate abstract class ... '_run'` | Only `_arun` defined | Define `_run` (it may be `async def`) |
 | `Action 'lookup_stock' don't exist, these are the only available Actions: ...`, or the agent never uses the MCP tool | Prompt names the bare tool (`lookup_stock`) but the LLM sees `python_..._lookup_stock` | Describe the capability; derive names at runtime |
-| `mcps=["github#a,b"]` gives no tools | `#` selects one tool | `["github#a", "github#b"]` |
-| `mcps=["http://localhost:8000/mcp"]` gives no tools, no error | Non-`https://` strings are AMP slugs | `MCPServerHTTP(url="http://localhost:8000/mcp")` |
+| `ValidationError ... Invalid MCP reference: 'github#a,b'` | `#` takes one tool name | `["github#a", "github#b"]` |
+| `mcps=["https://...#a,b"]` gives no tools | Same, but https strings are not validated | One ref per tool |
+| `ValidationError ... Invalid MCP reference: 'http://localhost:8000/mcp'` | Strings must be `https://` or a slug | `MCPServerHTTP(url="http://localhost:8000/mcp")` |
+| `Anthropic function name '127_0_0_1_...' must start with a letter or underscore` | MCP server URL uses an IP address | Use a hostname (`localhost`) |
+| `https://` string MCP gives no tools under `akickoff()` or on AMP; the answer invents tool calls | String refs cannot resolve inside a running event loop | `MCPServerHTTP(url=...)` |
+| `GET /status` returns 500 `Internal Server Error` for a deployed run | The run hit `MCPConnectionError` (stdio file/command missing, wrong URL) | Fix the MCP connection; run the crew locally to see the error |
 | `tool_filter` keeps nothing | Filter used the server's camelCase name | Use the sanitized name (`get_forecast`) |
 | Run hangs at "Would you like to install it? [y/N]" | Missing optional package (`crewai-tools[mcp]`, `exa-py`, ...) | Install the extra before running |
 | Tool ran 3 times / side effect repeated | Native MCP call exceeded 30 s and was retried | Keep calls short and idempotent |
@@ -257,7 +283,7 @@ In a `@CrewBase` class, set `mcp_server_params` (and optionally `mcp_connect_tim
 | Repeated identical calls now hit the API every time | Crew cache is opt-in in 1.15.x | `Crew(cache=True)` |
 | Second kickoff of the same `@CrewBase` instance: `Event loop is closed` | Adapter stopped after the first kickoff | New crew instance per kickoff |
 | stdio MCP server says its API key is missing although it is in your `.env` | stdio servers get a minimal environment, not yours | `MCPServerStdio(..., env={"X_API_KEY": os.environ["X_API_KEY"]})` |
-| Works locally, no tools after deploy | stdio server not present/reachable in the deployment | Serve over HTTP at a stable URL |
+| Works locally, fails after deploy | stdio server file or command (`npx`, a laptop path) not in the deployment | Ship the server inside the package, or serve it over HTTP at a stable URL |
 
 ---
 
@@ -268,11 +294,12 @@ In a `@CrewBase` class, set `mcp_server_params` (and optionally `mcp_connect_tim
 - [ ] Failures returned as `ToolFailure`; `tool_failure_policy` chosen deliberately
 - [ ] `Crew(cache=...)` set explicitly; live-data tools excluded from caching
 - [ ] Optional packages and `crewai-tools[mcp]` installed up front, so no interactive prompt can block
-- [ ] One `"slug#tool"` ref per tool; `http://` servers via `MCPServerHTTP`, not a string
+- [ ] One `"slug#tool"` ref per tool; `http://` servers via `MCPServerHTTP`, not a string; hostnames, not IP addresses
+- [ ] No `https://` string refs in deployed crews or with `akickoff()` - use `MCPServerHTTP`
 - [ ] No prompt or code depends on a bare MCP tool name; stdio commands kept short
 - [ ] stdio servers get their keys through `env=` (they do not inherit the crew's environment)
 - [ ] MCP tool calls finish well under 30 s and are idempotent
-- [ ] Deployed crews use HTTP/SSE MCP servers at a stable URL that returns 406 on a bare GET
+- [ ] Deployed crews use HTTP/SSE MCP servers at a stable URL that returns 406 on a bare GET, or stdio servers shipped inside the package
 - [ ] A fresh `@CrewBase` instance per kickoff when using `mcp_server_params`
 
 ---

@@ -8,6 +8,7 @@ description: "Building CrewAI Flows on crewai 1.15.x: structured (Pydantic) vs d
 How to write a Flow that wires correctly, keeps typed state, persists and resumes, and calls crews and agents, on the current API.
 
 Verified against crewai 1.15.22 and 1.15.23 on 2026-10-01.
+Live-tested on CrewAI AMP and real LLMs on 2026-10-01.
 Run `crewai version` first; if the major/minor differs from 1.15, re-verify version-sensitive rows with the `ask-docs` skill before trusting them.
 
 Where the getting-started, design-agent or design-task skills in this plugin disagree with this skill, follow this skill - it was re-checked against crewai 1.15.22 and 1.15.23. The installed crewai source outranks both.
@@ -30,17 +31,23 @@ What the scaffold gives you:
 |---|---|
 | `pyproject.toml` | `[project.scripts]` `kickoff`, `run_crew` (both `<pkg>.main:kickoff`), `plot`, `run_with_trigger`; `[tool.crewai] type = "flow"` |
 | `src/<pkg>/main.py` | A `Flow[ContentState]` subclass plus `kickoff()` and `plot()` functions; `from crewai.flow import Flow, listen, start` |
-| `src/<pkg>/crews/content_crew/` | A classic `@CrewBase` crew with `config/agents.yaml` and `config/tasks.yaml` |
-| `.env` | `OPENAI_API_KEY` with a placeholder value - replace it with `<your-key>` before a real run |
-| `AGENTS.md`, `CLAUDE.md`, `GEMINI.md` (plus `CURSOR.md` from 1.15.23) | Coding-assistant instructions shipped by the CLI |
+| `src/<pkg>/crews/content_crew/` | A classic `@CrewBase` crew with `config/agents.yaml` and `config/tasks.yaml`; its agents set no `llm`, so they use the default OpenAI model |
+| `.env` | `OPENAI_API_KEY=YOUR_API_KEY` - a placeholder; a run with it fails with `401 ... Incorrect API key provided` |
+| `AGENTS.md`, `CLAUDE.md`, `GEMINI.md` (plus `CURSOR.md` from 1.15.23), `README.md`, `tests/` | Coding-assistant instructions and an empty tests folder |
+| `.git/` | `crewai create` runs `git init` (no commit, no remote) |
+
+To use another provider, set `llm: anthropic/claude-haiku-4-5` (for example) on each agent in `agents.yaml`, run `uv add "crewai[anthropic]"`, and put `ANTHROPIC_API_KEY=<your-key>` in `.env` - `crewai run` read the key from `.env` with nothing exported in the shell.
 
 Rules the scaffold implies:
 
 - Keep `[tool.crewai] type = "flow"`. The CLI uses it to decide that `crewai run` means `uv run kickoff`.
+- The template's `plan_content()` overwrites `self.state.topic` with `"AI Agents"` unless a trigger payload is present, so `kickoff(inputs={"topic": ...})` (and a deployed kickoff's `inputs`) is ignored. Delete that assignment before relying on inputs.
+- The template's `plot()` calls `plot()` with the default `show=True`, so `crewai flow plot` opens a browser. Change it to `plot("<name>.html", show=False)` for headless use.
 - Import with the absolute package path (`from lead_router.crews.content_crew.content_crew import ContentCrew`), as the template does.
 - `kickoff()` in `main.py` must return `None`. The generated console script does `sys.exit(kickoff())`, so returning the flow result (a dict, say) makes the process exit with status 1 and prints the value to stderr, and `crewai run` prints "An error occurred while running the flow" - yet `crewai run` itself still exits 0, so a CI step that only checks its exit code passes.
 - `crewai run --inputs '{...}'` is rejected for a Python flow: `Error: --inputs requires a declarative flow definition ([tool.crewai].definition) or --definition`. Pass inputs in code (`flow.kickoff(inputs=...)`), or read them from `sys.argv` in your `kickoff()` and call `uv run kickoff '<json>'`.
 - `crewai flow kickoff` still works but prints "deprecated. Use 'crewai run' instead."
+- A placeholder or invalid key makes the flow fail, yet `crewai run` still exits 0 (it prints `An error occurred while running the flow: Command '['uv', 'run', 'kickoff']' returned non-zero exit status 1.`). Check for that line, not the exit code.
 
 ---
 
@@ -93,6 +100,8 @@ State rules (each one prevents a real failure):
 | Spell `inputs` keys exactly like the model fields | Unknown keys are **silently dropped** on structured state |
 | Pass `inputs` of the right type | `inputs={"topic": 5}`: `ValueError: Invalid inputs for structured state` |
 | Never set `self.state.id` by hand | It is the persistence key; use `restore_from_state_id` (section 6) |
+
+On a deployed flow (tested on CrewAI AMP, 2026-10-01), `GET /inputs` lists the state model's fields (every field except `id`), and the `inputs` object of `POST /kickoff` is applied to state exactly like `kickoff(inputs=...)`. A body without the `inputs` wrapper (`{"text": "..."}`) was still accepted (`200` and a `kickoff_id`) and the run succeeded on default state - the value never reached the flow. The run's `state.id` equalled its `kickoff_id`. Calling patterns: the **call-deployed-crew** skill.
 
 ---
 
@@ -243,6 +252,7 @@ print(second.state.id != first.state.id)               # True: a fork with a new
 | You want | Do | Not |
 |---|---|---|
 | Import | `from crewai.flow import persist` or `from crewai.flow.persistence import persist` | `from crewai.flow.flow import persist` (ImportError) |
+| Decorate | `@persist()` - always with parentheses | Bare `@persist` on a class: the class is replaced by a function and instantiating it raises `TypeError: persist.<locals>.decorator() missing 1 required positional argument: 'target'`. Bare `@persist` on a method: **no error at all** - the method body never runs, `kickoff()` returns the flow object, nothing is saved |
 | Seed a new run from a saved state | `kickoff(restore_from_state_id=sid)` - hydrates, then writes under a fresh `state.id` | `kickoff(inputs={"id": sid})` - deprecated; resumes under the same id and gives no warning |
 | Save only at a checkpoint-worthy step | `@persist()` on that method (stack it above `@listen`) | Class-level when you only need the final state |
 | Change some fields on the restored run | Pass them in `inputs` with `restore_from_state_id`; inputs are applied after hydration | Editing the SQLite file |
@@ -252,7 +262,18 @@ Where it stores state, and the silent cases:
 - Default backend: `SQLiteFlowPersistence`, file `flow_states.db` in `appdirs.user_data_dir(<CREWAI_STORAGE_DIR or current dir name>, "CrewAI")` - on macOS `~/Library/Application Support/<name>/`, on Linux `~/.local/share/<name>/`. Set `CREWAI_STORAGE_DIR` to an **absolute path** and the file lands directly in that directory. Or pass a path: `@persist(SQLiteFlowPersistence("/abs/path/flows.db"))`.
 - An unknown `restore_from_state_id` does not raise: it logs "No flow state found ... proceeding without hydration" and runs from defaults.
 - `restore_from_state_id` on a flow **without** `@persist` is ignored silently.
-- `@persist` is a local SQLite file. On a hosted deployment, prove it survives before relying on it: deploy a tiny flow with no LLM calls, kick it off twice with `restore_from_state_id`, and check the count. For durable state you control, implement `FlowPersistence` against your own database ([persistence-and-checkpoints](references/persistence-and-checkpoints.md)).
+- Locally `@persist` is a SQLite file. For durable state you control, implement `FlowPersistence` against your own database ([persistence-and-checkpoints](references/persistence-and-checkpoints.md)).
+
+On CrewAI AMP (tested 2026-10-01 with a class-level `@persist()` flow deployed by ZIP upload), send the id as a top-level `restoreFromStateId` beside `inputs` in `POST /kickoff`:
+
+| Kickoff body | Observed |
+|---|---|
+| `{"inputs": {...}, "restoreFromStateId": "<state_id>"}` | State restored (counter and list carried over, fields not in `inputs` kept), `inputs` applied on top, new `state.id` (= the new `kickoff_id`) |
+| Same, after two `crewai deploy push` redeploys | Still restored - the saved state survived the redeploys |
+| `restoreFromStateId` that matches nothing | No error; the run starts from defaults |
+| `{"inputs": {"id": "<state_id>", ...}}` (deprecated) | Restored and kept the **old** `state.id`, which then differs from the `kickoff_id` |
+
+Return `self.state.id` from the last method (or read the `kickoff_id`) so callers have the id to restore from.
 
 ---
 
@@ -285,7 +306,8 @@ flow.kickoff()
 Resume: `EtlFlow().kickoff(from_checkpoint=CheckpointConfig(restore_from="./.checkpoints/<branch>/<file>.json"))`. Completed methods are skipped. To change state before continuing (for example to clear a flag that caused the failure), use `flow = EtlFlow.from_checkpoint(CheckpointConfig(restore_from=path))`, edit `flow.state`, then `flow.kickoff()`.
 
 - **On a Flow, set `on_events=["method_execution_finished"]`.** The default `["task_completed"]` (and `checkpoint=True`) wrote no checkpoint at all for a flow, even one whose method ran a crew.
-- Files are written under `location/<branch>/` (for example `.checkpoints/main/<timestamp>_<id>_p-none.json`). Use `crewai checkpoint list <location>` to find them.
+- Files are written under `location/<branch>/` as `<timestamp>_<id>_p-<parent>.json`, one per finished method. The timestamp has one-second resolution and the id is random, so **sorting file names does not find the latest** when several methods finish in the same second (a sorted list picked the second-to-last). Use `max(files, key=os.path.getmtime)`, or `crewai checkpoint list <location>` (newest first).
+- **Resume does not continue past a router.** A checkpoint taken after a `@router` (or a `@human_feedback` method with `emit`) has finished resumes, runs nothing, and returns the router's label (or `None`) with no error - the label's listeners never run. A crash anywhere downstream of a router therefore cannot be resumed from the latest checkpoint; only checkpoints taken before the router finished continue through it. Verified on 1.15.22 and 1.15.23. Keep crash-prone work upstream of routers, or make the downstream steps idempotent and re-run the flow.
 - `kickoff(from_checkpoint=..., restore_from_state_id=...)` raises `ValueError: Cannot combine ...`. Pick one system.
 
 ---
@@ -319,9 +341,10 @@ class ReviewFlow(Flow):
 - `HumanFeedbackResult` fields: `output`, `feedback`, `outcome`, `timestamp`, `method_name`, `metadata`. The text is **`result.feedback`** (`feedback_text` raises AttributeError). Also on the flow: `self.last_human_feedback`, `self.human_feedback_history`.
 - Empty feedback -> `default_outcome`, or `emit[0]` if no default. Put the safe outcome first and set it as `default_outcome`, so pressing Enter never approves.
 - Non-empty feedback that the LLM cannot map to a label raises `HumanFeedbackCollapseError` - it does not fall back.
+- Non-empty feedback is mapped by `llm`: with `anthropic/claude-haiku-4-5`, "Looks good to me, ship it." became `approved` and "No, the tone is wrong - please rewrite it more politely." became `needs_revision`; the original text stays in `result.feedback`.
 - `default_outcome` without `emit` raises `ValueError: default_outcome requires emit to be specified.`
 - Without `emit`, the next listener gets the `HumanFeedbackResult` and no routing happens.
-- The default provider reads the console. Pass `provider=` (an object with `request_feedback(context, flow) -> str`) for tests or a UI; raise `HumanFeedbackPending` from it to pause, then `MyFlow.from_pending(flow_id, persistence).resume(feedback)` later ([persistence-and-checkpoints](references/persistence-and-checkpoints.md)). Never use `input()` in a deployed flow.
+- The default provider reads the console. Pass `provider=` (an object with `request_feedback(context, flow) -> str`) for tests or a UI; raise `HumanFeedbackPending` from it to pause, then `MyFlow.from_pending(flow_id, persistence).resume(feedback)` later ([persistence-and-checkpoints](references/persistence-and-checkpoints.md)). With no stdin (CI, `< /dev/null`, a background job) the console provider raises `EOFError: EOF when reading a line` and the flow fails. Never use `input()` in a deployed flow.
 
 ---
 
@@ -350,6 +373,7 @@ For multi-turn chat, import from `crewai.flow` (`ConversationConfig`, `Conversat
 | Symptom | Cause | Fix |
 |---|---|---|
 | `ImportError: cannot import name 'persist'` | `from crewai.flow.flow import persist` | `from crewai.flow import persist` |
+| `TypeError: persist.<locals>.decorator() missing 1 required positional argument: 'target'`, or a method that never runs | Bare `@persist` without parentheses | `@persist()` |
 | `listen condition 'x' references the handler name 'x'` | Router label equals the listening method's name | Rename the label or the method |
 | `RecursionError: Method 'r' has been called 100 times` | Router returned a label equal to a method name (often its own trigger) | Use labels that are not method names |
 | Flow stops after the router, no error | Router returned a label with no `@listen` | Listen for every label; type the router `-> Literal[...]` |
@@ -363,6 +387,9 @@ For multi-turn chat, import from `crewai.flow` (`ConversationConfig`, `Conversat
 | Resumed run starts from defaults | Unknown id, or no `@persist` on the class | Check the id and decorator; both cases are silent |
 | Same execution id reused across runs | `inputs={"id": ...}` | `restore_from_state_id=` |
 | No checkpoint files for a flow | Default `on_events=["task_completed"]` | `on_events=["method_execution_finished"]` |
+| Checkpoint resume returns a label (or `None`) and runs nothing | The checkpoint was taken after a router finished | Resume from a checkpoint before the router, or re-run |
+| `EOFError: EOF when reading a line` in `@human_feedback` | Console provider with no stdin | Pass `provider=` |
+| Scaffolded flow ignores the `topic` input | Template `plan_content()` hard-codes `"AI Agents"` | Remove the assignment |
 | `AttributeError: ... 'feedback_text'` | Old field name | `result.feedback` |
 | `HumanFeedbackCollapseError` | Feedback matched no `emit` label | Clear labels, a capable `llm`, catch the error |
 | `plot()` file not in the project | It writes to a temp dir | Use the returned path |
@@ -376,9 +403,9 @@ For multi-turn chat, import from `crewai.flow` (`ConversationConfig`, `Conversat
 - [ ] Router return type is `Literal[...]` (or `emit=[...]`) so `plot()` shows the edges
 - [ ] Joins use `or_` (first wins, once) or `and_` (all) deliberately
 - [ ] `async def` methods `await crew.akickoff()`; sync methods call `kickoff()`
-- [ ] `persist` imported from `crewai.flow`; resume uses `restore_from_state_id`
+- [ ] `persist` imported from `crewai.flow` and written `@persist()`; resume uses `restore_from_state_id` (`restoreFromStateId` over HTTP)
 - [ ] `CREWAI_STORAGE_DIR` set to an absolute path where state must be found again
-- [ ] Checkpointed flows use `on_events=["method_execution_finished"]`
+- [ ] Checkpointed flows use `on_events=["method_execution_finished"]`; the latest file is picked by mtime; crash-prone steps sit before routers
 - [ ] `@human_feedback` has the safe outcome first and as `default_outcome`; code reads `.feedback`
 - [ ] `main.kickoff()` returns `None`; `[tool.crewai] type = "flow"` is present
 - [ ] Ran `crewai flow plot` (or `plot(show=False)`) and checked the graph

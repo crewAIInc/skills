@@ -8,21 +8,29 @@ Exactly what `crewai deploy create` / `crewai deploy push` send to CrewAI AMP on
 
 `crewai deploy create`:
 
-1. Runs pre-deploy validation (unless `--skip-validate`). If there is no lockfile it runs `crewai install` to create one, then validates again.
-2. Prepares Git: if the directory is not a Git repo, runs `git init` and commits everything not ignored as "Initial crew" (adding `.env`, `.env.*`, `.venv/`, caches, `build/`, `dist/` to `.git/info/exclude` first). If `origin` exists, runs `git fetch`.
+1. Runs pre-deploy validation (unless `--skip-validate`). If there is no lockfile it ignores `missing_lockfile`, and validation's own `uv run` usually creates `uv.lock`; if it is still missing, it runs `crewai install`, then validates again.
+2. Prepares Git: if the directory is not a Git repo, runs `git init`; if the repo has no commits (the `crewai create` scaffold runs `git init` without committing), commits everything not ignored as "Initial crew" after adding `.env`, `.env.*`, `.venv/`, caches, `build/`, `dist/` to `.git/info/exclude`. If `origin` exists, runs `git fetch`.
 3. Reads every `KEY=VALUE` line from `./.env`.
-4. With an `origin` remote: asks you to confirm the env var names and the remote URL (`-y` skips both prompts), then creates a Git-based deployment from the project name, the remote URL, and the env vars. No code leaves your machine.
-5. Without `origin`: prints `No origin remote found. Deploying from a ZIP upload instead.`, confirms the env var names, and uploads a ZIP plus the env vars.
+4. With an `origin` remote: asks you to confirm the env var names and the remote URL (`-y` skips both prompts), then creates a Git-based deployment from the project name, the remote URL, and the env vars. No code leaves your machine. The CLI does not check that AMP can read the repo: with a private repo AMP has no access to, create succeeds and the build fails with `git_clone_failure` (`fatal: could not read Username for 'https://github.com': terminal prompts disabled`).
+5. Without `origin`: prints `No origin remote found. Deploying from a ZIP upload instead.`, shows `Press Enter to continue with N env vars: KEY1, KEY2` (`-y` skips it; with no terminal input it aborts before uploading), and uploads a ZIP plus the env vars.
 
 `crewai deploy push [--uuid <id>]`:
 
 1. Validation and lockfile handling as above.
 2. Looks the deployment up by `--uuid`, or by `[project].name` in the currently selected org.
-3. If AMP reports the deployment is ZIP-based: builds a fresh ZIP and re-sends every key in `./.env`. There is no confirmation prompt on this path.
-4. If AMP reports it is Git-based: asks AMP to redeploy. Nothing is uploaded and no env vars are sent; AMP pulls the repository.
-5. Only if AMP does not report the type: falls back to the local view - `origin` present means a Git redeploy, no `origin` means a ZIP upload with `.env`.
+3. If the status response carries the CLI's ZIP flag, it follows it: ZIP-based means a fresh ZIP plus every key in `./.env`; Git-based means a redeploy request.
+4. Otherwise it falls back to the local view - `origin` present means a redeploy request (nothing uploaded, no env vars), no `origin` means a ZIP upload with `.env` and no confirmation prompt.
 
-Consequence: the source type is fixed at create time. Adding an `origin` to a ZIP deployment, or removing it from a Git deployment, does not change how `push` deploys it.
+On CrewAI AMP on 2026-10-01 the status response carried `source_type` (`zip` / `github`) but not the flag the CLI 1.15.22-1.15.23 reads, so every push took step 4. AMP itself builds from the source chosen at create time. Observed live:
+
+| Deployment | Local state at `push` | CLI did | AMP did |
+|---|---|---|---|
+| ZIP | no `origin` | ZIP of the working tree (uncommitted edit included) + `.env` | Built the new ZIP; the uncommitted code ran |
+| ZIP | `origin` added later | Redeploy request only | Rebuilt the previous ZIP; new code and `.env` values were not deployed; Online |
+| Git | `origin` present | Redeploy request only | Cloned the repository |
+| Git | `origin` removed | ZIP + `.env` | Ignored the ZIP and cloned the repository |
+
+Consequence: never change `origin` after create, and read the push output - `Preparing project ZIP...` / `Uploading project ZIP...` appear only when a ZIP was sent. `push` also prints the deployment record, including its bearer token; keep that output out of tickets and CI logs.
 
 ---
 
@@ -37,6 +45,8 @@ Consequence: the source type is fixed at create time. Adding an `origin` to a ZI
 | | Everything outside the project root |
 
 Without Git available at all, the CLI walks the directory instead and `.gitignore` is not applied - only the fixed exclusions above.
+
+What the running deployment sees can be narrower than the ZIP. On 2026-10-01 a deployment whose ZIP root held `.env.example`, `.gitignore`, `README.md`, `pyproject.toml`, `untracked_scratch.txt` and `uv.lock` listed only `README.md`, `pyproject.toml`, `src`, `untracked_scratch.txt` and `uv.lock` at runtime. Untracked files ship; root-level dotfiles did not reach the runtime.
 
 Preview the file list before a ZIP deploy (matches the CLI's selection exactly on 1.15.22-1.15.23 in a Git checkout):
 
@@ -66,16 +76,26 @@ The `.env` reader is literal:
 | Command and path | Env vars sent |
 |---|---|
 | `create` (Git or ZIP) | All `.env` keys |
-| `push`, ZIP-based deployment | All `.env` keys, no prompt |
-| `push`, Git-based deployment | None |
-| Any path with no `.env` file | None (prints `Error: .env not found.` and continues) |
+| `push` with no local `origin` (ZIP) | All `.env` keys, no prompt - **replacing** the deployment's variables: keys absent from `.env` are deleted |
+| `push` with a local `origin` | None |
+| Any path with no `.env` file | None (prints `Error: .env not found.` and continues); existing deployment variables are kept |
+
+Live on 2026-10-01 (ZIP deployment, a crew that reports which marker variables it sees):
+
+| Push | Result at the next kickoff |
+|---|---|
+| `.env` = key + `DTA_MARKER=env-v2` + `DTA_NOTE=3  # note` | `DTA_MARKER='env-v2'`, `DTA_NOTE='3  # note'` (comment kept) |
+| no `.env` | unchanged: `DTA_MARKER='env-v2'`, key present |
+| `.env` = `DTA_MARKER=env-v4-subset` only | `FAILED`: `ValueError: ANTHROPIC_API_KEY is required` |
+| `.env` = key + `DTA_MARKER=env-v5` | `DTA_NOTE='unset'` - the earlier variable was gone |
 
 Practices:
 
 - Keep values bare in `.env`: no inline comments, no surrounding quotes.
-- Keep only this deployment's keys in the project `.env`; never park unrelated secrets there.
+- Keep exactly this deployment's complete key set in the project `.env`; never park unrelated secrets there, and never push with a partial file.
 - To redeploy a ZIP deployment without touching its variables, move `.env` aside for the push, and manage values in the dashboard.
 - On a Git-based deployment, change env values in the dashboard; editing `.env` and pushing does nothing.
+- Locally, python-dotenv strips inline comments (`3  # note` -> `3`), so a local run will not reveal the verbatim value the deployment receives.
 - Set every variable on the deployment itself and confirm it with a kickoff that reports the variable names it can see (never the values).
 
 ---

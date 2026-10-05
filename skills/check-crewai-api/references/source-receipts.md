@@ -28,6 +28,7 @@ The installed crewai 1.15.22 source behind each row in the skill. Line numbers a
 | `output_pydantic` and `output_json` are exclusive | `crewai/task.py:568` |
 | `allow_code_execution` / `code_execution_mode` deprecated | `crewai/agent/core.py:285-288, 311-314, 413-419` |
 | `Crew.function_calling_llm` deprecated | `crewai/crew.py:294` |
+| One executor per agent cannot run concurrently (1.15.23) | `crewai/experimental/agent_executor.py:2869` ("Executor is already running") |
 
 ## Running and output
 
@@ -36,6 +37,7 @@ The installed crewai 1.15.22 source behind each row in the skill. Line numbers a
 | `kickoff` needs a dict | `crewai/crews/utils.py:282` |
 | `kickoff_async` wraps sync `kickoff` in `asyncio.to_thread`; `akickoff` is native | `crewai/crew.py:1135, 1168, 1187, 1215` |
 | `kickoff_for_each` | `crewai/crew.py:1099` |
+| `kickoff_for_each` copies the crew per input; a copied task keeps the already-interpolated description (1.15.23) | `crewai/crew.py:1121`; `crewai/task.py:1154` |
 | `CrewOutput` fields | `crewai/crews/crew_output.py:17-27` |
 | `out["key"]` reads pydantic then json_dict | `crewai/crews/crew_output.py:77` |
 
@@ -63,6 +65,7 @@ The installed crewai 1.15.22 source behind each row in the skill. Line numbers a
 | Guardrail result is unpacked as a tuple | `crewai/utilities/guardrail.py:115` |
 | Raises after `guardrail_max_retries` | `crewai/task.py:1389` |
 | `HallucinationGuardrail` is a no-op in open source | `crewai/tasks/hallucination_guardrail.py:75` |
+| `output_file` gets `json_dict` or the pydantic JSON when set, else `raw`; a leading `/` is stripped (1.15.23) | `crewai/task.py:782-790`, `:542` |
 
 ## Memory and knowledge
 
@@ -73,6 +76,7 @@ The installed crewai 1.15.22 source behind each row in the skill. Line numbers a
 | Agent knowledge failure raises at kickoff | `crewai/agent/core.py:492` |
 | Crew knowledge failure only logs | `crewai/crew.py:720`; `crewai/knowledge/storage/knowledge_storage.py:135` |
 | Custom knowledge embedder type checks | `crewai/rag/embeddings/providers/custom/custom_provider.py:15`; `crewai/rag/embeddings/providers/custom/types.py:12` |
+| `ollama` embedder needs the `ollama` Python package (1.15.23) | `chromadb/utils/embedding_functions/ollama_embedding_function.py:34` |
 | Storage paths and `CREWAI_STORAGE_DIR` | `crewai/memory/storage/lancedb_storage.py:69`; `crewai_core/paths.py:13, 24`; `crewai/rag/chromadb/constants.py:11` |
 
 ## CLI
@@ -83,3 +87,6 @@ The installed crewai 1.15.22 source behind each row in the skill. Line numbers a
 | `run --inputs` only for declarative flows and crews | `crewai_cli/run_crew.py:674` |
 | `reset-memories -s/-l/-e` are hidden aliases for `-m` | `crewai_cli/cli.py:427-445, 480` |
 | `create flow` writes `.env` with a placeholder key | `crewai_cli/create_flow.py:56` |
+| `CREWAI_DMN` non-interactive mode: default JSON crew on create, plain run without the run view (1.15.23) | `crewai_cli/utils.py:79`; `crewai_cli/create_json_crew.py:760, 1304`; `crewai_cli/run_crew.py:334` |
+| JSON crew run view exits 1 on failure; classic `crewai run` swallows the subprocess error (1.15.23) | `crewai_cli/run_crew.py:359`, `:822` |
+| Scaffolds pin only `crewai[tools]`, no provider extra (1.15.23) | `crewai_cli/create_json_crew.py:1349`; classic `templates/crew/pyproject.toml` |

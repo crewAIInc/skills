@@ -198,7 +198,7 @@ With `@CrewBase` the equivalent is `ResearchCrew().crew().kickoff(inputs=...)` p
 | Quotas, idempotency, audit records | Keep them in storage you own; claim daily quota under a lock or a transactional update |
 | External rate limits | Concurrent runs share them; wait on per-minute limits instead of failing |
 | Memory-heavy work | Stream or chunk large inputs; measure peak memory locally first |
-| `input()` | Never in a deployed crew; use `human_input=True` + `POST /resume`, or a Flow with `@human_feedback` |
+| `input()` | Never in a deployed crew; use a Flow with `@human_feedback`, or `human_input=True` + `POST /resume` after proving the resume cycle on your deployment (SKILL.md section 5) |
 
 ---
 

@@ -2,7 +2,9 @@
 
 Every check the local pre-deploy validator runs on crewai 1.15.22-1.15.23, the code it prints, and the gaps it leaves.
 
-`crewai deploy validate` contacts no platform API. It exits 1 when any ERROR is found and 0 otherwise (warnings never block). `crewai deploy create` and `crewai deploy push` run the same checks first. The console output strips the bracketed code, so `ERROR [missing_lockfile] ...` prints as `ERROR  Expected to find ...` - match on the message text below.
+`crewai deploy validate` contacts no platform API. It exits 1 when any ERROR is found and 0 otherwise (warnings never block). `crewai deploy create` and `crewai deploy push` run the same checks first, but exit 0 when they stop on a validation error - gate scripts on `crewai deploy validate`.
+
+The AMP build runs its own import test ("Testing automation..." in `crewai deploy logs`), so a project pushed with `--skip-validate` that has a relative import or an outside-the-root import fails there with the real traceback in the deployment log. The console output strips the bracketed code, so `ERROR [missing_lockfile] ...` prints as `ERROR  Expected to find ...` - match on the message text below.
 
 ---
 
@@ -80,7 +82,9 @@ uv run python -c "from acme_flow.main import ContentFlow; ContentFlow()"
 
 | Gap | Why | Defence |
 |---|---|---|
-| Imports from outside the project root | The local `sys.path` hack works; only the root is uploaded | Keep each deployable self-contained |
+| Imports from outside the project root | The local `sys.path` hack works; only the root is uploaded. On AMP the build's import test fails: `ModuleNotFoundError: No module named '<module>'`, status `Automation error, fix the code and deploy again.` | Keep each deployable self-contained |
+| `origin` added or removed after create | Validate never looks at the deployment | Keep `origin` as it was at create; check push output for `Uploading project ZIP...` |
+| AMP cannot read a private Git repo | Validate never contacts the platform | Connect GitHub in AMP first; the failure shows only after create as `git_clone_failure` |
 | Uncommitted or unpushed changes on a Git-based deployment | Validate reads your working tree; AMP builds from the repo | `git status` clean and pushed before `deploy push` |
 | Wrong org selected | Validate never contacts the platform | `crewai org current` |
 | Env var present locally but missing on the deployment | Validate reads local `.env` and your shell | Set it on the deployment; check with a kickoff |

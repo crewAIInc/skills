@@ -8,6 +8,7 @@ description: "Current crewai 1.15.x API versus the 0.x API that coding assistant
 Load this before writing or reviewing crewai code: it maps what you probably remember to what crewai 1.15.x actually accepts.
 
 Verified against crewai 1.15.22 and 1.15.23 on 2026-10-01.
+Live-tested on CrewAI AMP and real LLMs on 2026-10-01.
 Run `crewai version` first; if the major/minor differs from 1.15, re-verify version-sensitive rows with the `ask-docs` skill before trusting them.
 
 Where the getting-started, design-agent or design-task skills in this plugin disagree with this skill, follow this skill - it was re-checked against crewai 1.15.22 and 1.15.23. The installed crewai source outranks both.
@@ -77,6 +78,7 @@ from crewai.events import BaseEventListener, crewai_event_bus
 | `Crew(memory=True, memory_config={...})` | `Crew(memory=Memory(...))` | `memory_config` is silently ignored |
 | `Agent(allow_code_execution=True)` / `code_execution_mode="unsafe"` | Remove; use a sandbox tool | Deprecated no-ops; `allow_code_execution=True` emits a `DeprecationWarning` |
 | `Crew(function_calling_llm=...)` | Remove, or set `llm` per agent | Deprecated, `DeprecationWarning` |
+| Two `async_execution=True` tasks with the same `agent` | One agent per concurrent async task | `RuntimeError: Executor is already running. Cannot invoke the same executor instance concurrently.` |
 
 ```python
 from crewai import Agent, Crew, Process, Task
@@ -106,6 +108,7 @@ print(out.raw)
 | `crew.kickoff("honey bees")` | `crew.kickoff(inputs={"topic": "honey bees"})` | `TypeError: inputs must be a dict or Mapping, got str` |
 | `await crew.kickoff_async(...)` for native async | `await crew.akickoff(...)` | Works, but `kickoff_async` runs the sync `kickoff` in a thread (`asyncio.to_thread`) |
 | `result.output` / `result.final_output` / `result.result` | `result.raw` | `AttributeError: 'CrewOutput' object has no attribute ...` |
+| `crew.kickoff(...)` then `crew.kickoff_for_each(...)` on the same `Crew` | Build a fresh `Crew` for `kickoff_for_each` (or call it before any `kickoff`) | No error, but every run reuses the first kickoff's inputs: the per-run copies keep the already-interpolated task text |
 
 `CrewOutput` fields: `raw`, `pydantic`, `json_dict`, `tasks_output` (a list of `TaskOutput`), `token_usage`. `out["field"]` reads from `pydantic`/`json_dict`. `kickoff_for_each(inputs=[...])` returns a list of `CrewOutput`.
 
@@ -114,18 +117,23 @@ import asyncio
 
 from crewai import Agent, Crew, Task
 
-writer = Agent(role="Writer", goal="Write", backstory="Writes short text.", llm="openai/gpt-4.1-mini")
-crew = Crew(agents=[writer], tasks=[Task(description="One line on {topic}.", expected_output="One line.", agent=writer)])
 
-out = crew.kickoff(inputs={"topic": "bees"})
+
+def make_crew() -> Crew:
+    writer = Agent(role="Writer", goal="Write", backstory="Writes short text.", llm="openai/gpt-4.1-mini")
+    task = Task(description="One line on {topic}.", expected_output="One line.", agent=writer)
+    return Crew(agents=[writer], tasks=[task])
+
+
+out = make_crew().kickoff(inputs={"topic": "bees"})
 print(out.raw, out.token_usage.total_tokens, [t.raw for t in out.tasks_output])
 
-many = crew.kickoff_for_each(inputs=[{"topic": "bees"}, {"topic": "ants"}])
+many = make_crew().kickoff_for_each(inputs=[{"topic": "bees"}, {"topic": "ants"}])
 print([o.raw for o in many])
 
 
 async def main():
-    return await crew.akickoff(inputs={"topic": "wasps"})
+    return await make_crew().akickoff(inputs={"topic": "wasps"})
 
 print(asyncio.run(main()).raw)
 ```
@@ -140,12 +148,12 @@ LiteLLM is no longer a dependency. `LLM(model=...)` is a factory that returns a 
 |---|---|---|
 | `llm="anthropic/claude-sonnet-4-5"` with plain `crewai` installed | `uv add "crewai[anthropic]"`, then the same string | `ImportError: Anthropic native provider not available, to install: uv add "crewai[anthropic]"` |
 | `llm="gemini/gemini-2.5-flash"` with plain `crewai` | `uv add "crewai[google-genai]"` | `ImportError: Google Gen AI native provider not available` |
-| `llm="groq/llama-3.3-70b-versatile"` (or any non-native provider) | `uv add "crewai[litellm]"` | `ImportError: Unable to initialize LLM ... LiteLLM fallback package is not installed` |
+| `llm="groq/llama-3.3-70b-versatile"` (or `mistral/...`, any non-native provider) | `uv add "crewai[litellm]"` | `ImportError: Unable to initialize LLM with model '...'. The model did not match any supported native provider (...), and the LiteLLM fallback package is not installed.` |
 | No `llm=` and assuming `gpt-4` | Default is `gpt-4.1-mini`; set `MODEL=...` or `llm=` | |
 | `llm.call(messages, response_format=Model)` | `llm.call(messages, response_model=Model)` | `TypeError: ... unexpected keyword argument 'response_format'. Did you mean 'response_model'?` |
 | Custom `BaseLLM.call(self, messages, tools=None, callbacks=None, available_functions=None)` | Also accept `from_task=None, from_agent=None, response_model=None` (or `**kwargs`) | `TypeError: call() got an unexpected keyword argument 'from_task'` at kickoff |
 
-Native providers: openai, anthropic/claude, azure, google/gemini, bedrock/aws, openrouter, deepseek, ollama, hosted_vllm, cerebras, dashscope, snowflake. Extras: `crewai[anthropic]`, `crewai[google-genai]`, `crewai[bedrock]`, `crewai[azure-ai-inference]`, `crewai[litellm]`. Construction never checks the key; kickoff does (`ValueError: OPENAI_API_KEY is required`).
+Native providers: openai, anthropic/claude, azure, google/gemini, bedrock/aws, openrouter, deepseek, ollama, hosted_vllm, cerebras, dashscope, snowflake. Extras: `crewai[anthropic]`, `crewai[google-genai]`, `crewai[bedrock]`, `crewai[azure-ai-inference]`, `crewai[litellm]`. Construction never checks the key; kickoff does (`ValueError: OPENAI_API_KEY is required`, or `ANTHROPIC_API_KEY is required`; a wrong key gets the provider's `AuthenticationError ... 401`). The `crewai create` scaffolds never add a provider extra, even with `--provider anthropic/...`: run `uv add "crewai[anthropic]"` yourself.
 
 ```python
 from crewai import LLM
@@ -193,6 +201,8 @@ print(Crew(agents=[agent], tasks=[task]).kickoff().raw)
 | `Task(response_format=Model)` | `Task(output_pydantic=Model)` | Silently ignored |
 | `Agent.kickoff(msg, response_model=Model)` | `Agent.kickoff(msg, response_format=Model)` | `TypeError: ... Did you mean 'response_format'?` |
 | `Task(output_pydantic=M, output_json=M)` | Pick one | `ValidationError: Only one output type can be set` |
+| `Task(output_pydantic=M, output_file="report.md")` expecting prose in the file | Drop `output_pydantic`, or render the model yourself | The file gets the model's JSON, whatever the extension |
+| `output_file="/abs/path/report.md"` | A relative path (or `output_file="{out_dir}/report.md"` via inputs) | The leading `/` is stripped, so the file lands under the current directory |
 | `output_pydantic: Report` in `tasks.yaml` | Set `output_pydantic=Report` in the `@task` method in Python | With no matching `@output_pydantic` class: `KeyError: 'Report'`. With one: silently dropped, `out.pydantic is None` |
 
 ```python
@@ -267,24 +277,27 @@ Memory is one `Memory` class (LanceDB storage). Its defaults call OpenAI: `text-
 | You probably wrote | Current form | What the wrong form does |
 |---|---|---|
 | `ShortTermMemory()`, `LongTermMemory()`, `EntityMemory()` | `Memory(...)` | `ImportError` |
-| `Crew(memory=True)` with no `OPENAI_API_KEY` | Set the key, or pass `Memory(llm=..., embedder=...)` | Crew **completes**; every save fails silently (only a `MemorySaveFailedEvent` is emitted) and nothing is stored |
-| `memory.remember(...)` with no key | Same | `RuntimeError: Memory requires an embedder for vector search` |
-| `Agent(knowledge_sources=[...])` with no key or embedder | Pass `embedder={...}` on the Agent or Crew | `ValueError: Invalid Knowledge Configuration: The OPENAI_API_KEY environment variable is not set.` at kickoff |
+| `Crew(memory=True)` with no (or an invalid) `OPENAI_API_KEY` | Set the key, or pass `Memory(llm=..., embedder=...)` | Crew **completes**; every save fails silently (only a `MemorySaveFailedEvent` is emitted) and nothing is stored |
+| `memory.remember(...)` with no key | Same | `RuntimeError: Memory requires an embedder for vector search` (an invalid key: `AuthenticationError ... 401`) |
+| `Agent(knowledge_sources=[...])` with no key or embedder | Pass `embedder={...}` on the Agent or Crew | `ValueError: Invalid Knowledge Configuration: The OPENAI_API_KEY environment variable is not set.` at kickoff (an invalid key: `AuthenticationError ... 401`) |
 | `Crew(knowledge_sources=[...])` with no key or embedder | Same | Logs `Failed to upsert documents`; crew runs with **no** knowledge |
+| Changing the knowledge `embedder` after a run stored knowledge | `crewai reset-memories -kn` (or `crew.reset_memories(command_type="knowledge")`), then run | `Embedding function conflict: new: <x> vs persisted: openai`; the crew runs with no knowledge |
 
-The embedder config shape is `{"provider": <name>, "config": {...}}`; the OpenAI model key is `model_name`.
+The embedder config shape is `{"provider": <name>, "config": {...}}`; the OpenAI model key is `model_name`. The `ollama` provider below also needs `uv add ollama` and a running Ollama server with the model pulled; without the package, crew knowledge is silently `None`. For a key-free embedder you control, use a callable (`Memory`) or a custom class (knowledge) - see [verify-installed-api.md](references/verify-installed-api.md).
 
 ```python
 from crewai import Agent, Crew, Memory, Task
 from crewai.knowledge.source.string_knowledge_source import StringKnowledgeSource
 
-embedder = {"provider": "ollama", "config": {"model_name": "nomic-embed-text"}}
+embedder = {"provider": "ollama", "config": {"model_name": "nomic-embed-text"}}  # needs: uv add ollama
 memory = Memory(llm="openai/gpt-4.1-mini", embedder=embedder)
 facts = StringKnowledgeSource(content="acme was founded in 2020.")
 
 agent = Agent(role="Analyst", goal="Answer", backstory="Uses knowledge.", llm="openai/gpt-4.1-mini")
 task = Task(description="When was acme founded?", expected_output="A year.", agent=agent)
 crew = Crew(agents=[agent], tasks=[task], memory=memory, knowledge_sources=[facts], embedder=embedder)
+if crew.knowledge is None:
+    print("knowledge failed to initialise - is the ollama package installed and the server running?")
 ```
 
 Reset stored data from the project directory with `crewai reset-memories -m` (memory; errors with `Memory memory system is not initialized` if the crew has no memory), `-kn` (knowledge), `-akn` (agent knowledge), `-k` (latest kickoff outputs), `-a` (all). The old `-s`, `-l`, `-e` flags are hidden deprecated aliases that print a warning and reset the unified memory. Storage path and offline embedders: [verify-installed-api.md](references/verify-installed-api.md).
@@ -295,16 +308,19 @@ Reset stored data from the project directory with `crewai reset-memories -m` (me
 
 | You probably wrote | Current form | What the wrong form does |
 |---|---|---|
-| `crewai create crew my_crew` expecting `crew.py` + YAML | `crewai create crew my_crew --classic` | Starts an interactive wizard that writes a JSON project (`crew.jsonc`, `agents/*.jsonc`); with no TTY it prints `Aborted!` |
+| `crewai create crew my_crew` expecting `crew.py` + YAML | `crewai create crew my_crew --classic` | Starts an interactive wizard that writes a JSON project (`crew.jsonc`, `agents/*.jsonc`); with no TTY it prints `Aborted!`. Non-interactive: `CREWAI_DMN=1 crewai create crew my_crew --provider anthropic/claude-haiku-4-5` writes a one-agent, one-task JSON crew with `"memory": true` |
+| `crewai run` on a JSON crew in CI or a script | `CREWAI_DMN=1 crewai run --inputs '{"topic": "bees"}'` | Opens a full-screen run view that waits for the user to quit, even with no TTY, so the command never exits |
+| Leaving `"memory": true` from the JSON scaffold with no `OPENAI_API_KEY` | Set the key, set `"memory": false`, or configure an embedder | The crew completes; memory recall and saves fail silently |
 | `crewai run --inputs '{...}'` on a classic crew | Put inputs in `main.py` `run()` | `Error: --inputs is only supported for declarative flows and crews` |
 | `crewai reset-memories -s -l -e` | `crewai reset-memories -m` | Deprecated aliases, warning printed |
 | `return crew.kickoff(...)` from `main.run()` | Do not return the output | The `run_crew` script calls `sys.exit(<CrewOutput>)` and exits 1 after a successful run; `crewai run` prints `An error occurred while running the crew: ... non-zero exit status 1` |
-| Trusting `crewai run`'s exit code in CI on a classic crew (`--classic`) or a Python flow | Run `uv run run_crew` (exit code propagates) or check the output | There `crewai run` exits 0 even when the crew or flow process failed; JSON (wizard) crews exit non-zero, and have no `run_crew` script |
+| Trusting `crewai run`'s exit code in CI on a classic crew (`--classic`) or a Python flow | Run `uv run run_crew` (exit code propagates) or check the output | There `crewai run` exits 0 even when the crew or flow process failed; JSON (wizard) crews exit 1 on failure (with `CREWAI_DMN=1`), and have no `run_crew` script |
 
 ```bash
 crewai version
 crewai create crew research_crew --classic --skip-provider
-cd research_crew && crewai install && crewai run
+cd research_crew && uv add "crewai[anthropic]"   # only if an agent uses an anthropic/ model
+crewai install && crewai run
 crewai reset-memories --help
 ```
 
@@ -339,7 +355,10 @@ The classic layout: `src/<name>/crew.py` (`@CrewBase` class), `src/<name>/config
 | Knowledge never appears in prompts | Crew-level knowledge failed to embed | Set `embedder=`; look for `Failed to upsert documents` |
 | `TypeError: ... unexpected keyword argument 'from_task'` | Custom `BaseLLM.call` with the old signature | Accept `from_task`, `from_agent`, `response_model`, `**kwargs` |
 | `Tuple[bool, Any]` ValidationError at `Task(...)` | Guardrail annotated `-> bool` or `tuple[bool, object]` | Annotate `-> tuple[bool, Any]` and return a tuple |
-| `crewai create crew` hangs or prints `Aborted!` | It is an interactive JSON wizard now | Add `--classic` for the `@CrewBase` layout |
+| `crewai create crew` hangs or prints `Aborted!` | It is an interactive JSON wizard now | Add `--classic` for the `@CrewBase` layout, or `CREWAI_DMN=1` for a default JSON crew |
+| `crewai run` never returns on a JSON crew | The run view waits for a keypress | `CREWAI_DMN=1 crewai run` |
+| `kickoff_for_each` results all answer the first topic | The `Crew` was already kicked off | Build a fresh `Crew` per batch |
+| `Embedding function conflict ... persisted: openai` | Knowledge was stored with another embedder | `crewai reset-memories -kn` |
 | `crewai run` reports `non-zero exit status 1` after the crew succeeds | `run()` returns the `CrewOutput` | Do not return it |
 
 ---
@@ -355,7 +374,8 @@ The classic layout: `src/<name>/crew.py` (`@CrewBase` class), `src/<name>/config
 - [ ] Guardrails return `(bool, value)` and are annotated `tuple[bool, Any]` or not at all
 - [ ] Memory and knowledge have an explicit embedder or a provider key in the environment
 - [ ] No `CodeInterpreterTool`, `allow_code_execution`, `ShortTermMemory`, `memory_config`
-- [ ] Classic projects created with `crewai create crew <name> --classic`
+- [ ] Classic projects created with `crewai create crew <name> --classic`; provider extra added with `uv add`
+- [ ] CI runs JSON crews with `CREWAI_DMN=1` and classic crews with `uv run run_crew`
 
 ---
 

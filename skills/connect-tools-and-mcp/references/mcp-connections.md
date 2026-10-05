@@ -34,7 +34,9 @@ agent = Agent(role="Ops assistant", goal="Answer ops questions", backstory="Prec
 | `MCPServerHTTP` | `url`, `headers`, `streamable`, `tool_filter`, `cache_tools_list` |
 | `MCPServerSSE` | `url`, `headers`, `tool_filter`, `cache_tools_list` |
 
-There is no `cwd`, `timeout` or `name` field. Relative paths in `args` resolve against the working directory of the crew process.
+There is no `cwd`, `timeout` or `name` field. Relative paths in `args` resolve against the working directory of the crew process; `args=["-m", "<pkg>.server"]` avoids depending on it.
+
+Give `MCPServerHTTP`/`MCPServerSSE` a hostname, not an IP address. The URL becomes the tool-name prefix, and a name that starts with a digit is rejected by Anthropic models: `ValueError: Anthropic function name '127_0_0_1_8765_mcp_lookup_stock' must start with a letter or underscore` (live run). `http://localhost:8765/mcp` gives `localhost_8765_mcp_lookup_stock` and works.
 
 A stdio server does not inherit the crew's environment. It starts with the MCP SDK's default set (`HOME`, `LOGNAME`, `PATH`, `SHELL`, `TERM`, `USER`; on Windows `APPDATA`, `PATH`, `USERPROFILE`, ...) plus whatever you put in `env=`. Verified: with `ACME_TOKEN` set in the crew process, the server reported `ACME_TOKEN visible: False` until it was passed via `env={"ACME_TOKEN": os.environ["ACME_TOKEN"]}`.
 
@@ -61,11 +63,12 @@ agent = Agent(
 
 | String | How it is resolved (verified) |
 |---|---|
-| starts with `https://` | Connected directly over streamable HTTP. `#name` keeps the tool whose sanitized name equals `name` |
+| starts with `https://` | Connected directly over streamable HTTP. `#name` keeps the tool whose sanitized name equals `name`. Discovery uses `asyncio.run()`, so inside a running event loop (`await crew.akickoff()`, a crew deployed on CrewAI AMP) the ref yields **zero tools with no error** - verified live both ways. Use `MCPServerHTTP` there |
 | anything else | Treated as a CrewAI AMP integration slug. The legacy `crewai-amp:` prefix is stripped. The config is fetched from your AMP account, so the integration must be connected there and the run must be able to authenticate to AMP |
-| `"http://localhost:8000/mcp"` | Not a URL to crewai - it is looked up as a slug, and the agent gets zero tools with no error. Use `MCPServerHTTP(url="http://...")` |
-| `"x#a,b"` | Zero tools. `#` carries exactly one tool name, and `a,b` sanitizes to `a_b`, which matches nothing |
-| slug not connected | Zero tools from that slug and an `MCPConfigFetchFailedEvent`; the run continues |
+| `"http://localhost:8000/mcp"`, `"localhost:8000"` | Rejected when the Agent is built: `ValidationError ... Invalid MCP reference: 'http://localhost:8000/mcp'. String references must be an 'https://' URL or a valid slug (e.g. 'notion', 'notion#search', 'crewai-amp:notion')`. Use `MCPServerHTTP(url="http://...")` |
+| `"slug#a,b"` | Rejected with the same ValidationError (a slug's `#` part allows one name of letters, digits, `_`, `-`) |
+| `"https://...#a,b"` | Accepted, but zero tools: `a,b` sanitizes to `a_b`, which matches nothing (verified live against a public server) |
+| slug not connected | Zero tools from that slug and an `MCPConfigFetchFailedEvent`; the run continues (also seen on an AMP deployment: run SUCCESS, agent had no tools) |
 
 ---
 
@@ -130,10 +133,10 @@ print(by_original["lookup_stock"].run(sku="A-100"))
 | Path | Connect | Discovery | Per call | Retries on timeout | Down at kickoff |
 |---|---|---|---|---|---|
 | `MCPServerStdio/HTTP/SSE`, AMP slugs | 30 s | 30 s | 30 s | 3 attempts, 1 s then 2 s backoff; the call is **re-sent** | raises `crewai.mcp.exceptions.MCPConnectionError` |
-| `"https://..."` string | 10 s | 15 s (3 tries) | 60 s | 3 attempts; the final error is **returned as text**, not raised | no tools from that ref; run continues |
+| `"https://..."` string | 10 s | 15 s (3 tries) | 60 s | 3 attempts; the final error is **returned as text**, not raised | no tools from that ref; run continues (also the case for a healthy server inside a running event loop) |
 | `MCPServerAdapter` | `connect_timeout` (default 30) | - | none from crewai | none | `RuntimeError: Failed to initialize MCP Adapter: ...` |
 
-Measured: a stdio tool that sleeps 35 s ran 3 times and failed after ~96 s with `Error executing MCP tool slow_report: Operation timed out after 30 seconds`. The same tool sleeping 65 s behind an `https://` string ran 3 times and returned `MCP tool execution failed after 3 attempts: Connection timed out after 60 seconds` after ~198 s.
+Measured: a stdio tool that sleeps 35 s ran 3 times and failed after ~96 s with `Error executing MCP tool slow_report: Operation timed out after 30 seconds` (direct `tool.run()` raises `RuntimeError`). In a crew with claude-haiku-4-5 the same tool ran 3 times in ~99 s, the agent received `Error executing tool: Error executing MCP tool slow_report: Operation timed out after 30 seconds` as its observation, a tool failure was recorded, and the crew finished normally. The same tool sleeping 65 s behind an `https://` string ran 3 times and returned `MCP tool execution failed after 3 attempts: Connection timed out after 60 seconds` after ~198 s.
 
 None of the native timeouts can be set through a config field or an Agent field in 1.15.22-1.15.23. Design for them:
 - Make MCP tools fast (well under 30 s) and idempotent, or split long work into "start job" and "get result" tools.
@@ -204,13 +207,15 @@ Reusing one instance for a second kickoff made every MCP call fail with `Event l
 | Situation | Use |
 |---|---|
 | Laptop, server is a local script or `npx`/`uvx` package | `MCPServerStdio` |
-| Deployed crew (CrewAI AMP or any container) | `MCPServerHTTP` or `MCPServerSSE` pointing at a service reachable from the deployment |
+| Deployed crew, server is Python code you own | `MCPServerStdio(command="python", args=["-m", "<pkg>.server"])` with the module inside `src/<pkg>/` - verified working on CrewAI AMP, as is `MCPServerAdapter` with `crewai-tools[mcp]` in `pyproject.toml` |
+| Deployed crew, server runs elsewhere | `MCPServerHTTP` or `MCPServerSSE` pointing at a service reachable from the deployment - not an `https://` string, which yields zero tools on AMP |
 | Integration your team connected in CrewAI AMP | `"slug"` / `"slug#tool"` |
 
-- stdio launches the server as a child process of the crew, on whatever machine runs the crew. A deployed crew cannot reach a stdio server on your laptop. If you do ship a stdio server inside the deployment, its command and files must be in the image.
+- stdio launches the server as a child process of the crew, on whatever machine runs the crew. A laptop path or an `npx` server is not in a deployment; on AMP both made the run fail with `MCPConnectionError`.
+- When a deployed run fails with `MCPConnectionError`, `GET /status/{kickoff_id}` was seen to return HTTP 500 `Internal Server Error` on every poll instead of a `FAILED` state. Reproduce locally (`crewai run`) to read the actual error.
 - Serve remote MCP over streamable HTTP at a path ending in `/mcp`, on a stable hostname you control, with auth.
 - Health check from anywhere: `curl -s -o /dev/null -w "%{http_code}" https://<host>/mcp`. **406** = healthy streamable-HTTP endpoint (a bare GET without the MCP `Accept` header is refused); **404** = wrong path; `000` / connection refused = down.
-- Keep credentials out of URL strings. Read them from environment variables into `headers`, and set those variables on the deployment.
+- Keep credentials out of URL strings. Read them from environment variables into `headers`, and set those variables on the deployment. A stdio server receives a deployment env var only through `env=` (verified on AMP).
 
 ---
 

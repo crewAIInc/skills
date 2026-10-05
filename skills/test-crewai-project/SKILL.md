@@ -1,6 +1,6 @@
 ---
 name: test-crewai-project
-description: "Deterministic, offline testing of CrewAI crews and flows with pytest: a stub BaseLLM (shipped in references/stub_llm.py) that drives text, structured output and tool calls with no API key, asserting on the prompts crewai built, testing guardrails and flow routing, what `crewai test` really does, event listeners for debugging, and the exact tracing/telemetry env var values. Use when writing tests for a crewai project, mocking or stubbing the LLM, writing a custom BaseLLM, seeing `TypeError: ... call() got an unexpected keyword argument 'from_task'`, `ValueError: OPENAI_API_KEY is required` in CI, running `crewai test`, adding a BaseEventListener, or setting CREWAI_TRACING_ENABLED / CREWAI_DISABLE_TELEMETRY / OTEL_SDK_DISABLED."
+description: "Deterministic, offline testing of CrewAI crews and flows with pytest: a stub BaseLLM (shipped in references/stub_llm.py) that drives text, structured output and tool calls with no API key, asserting on the prompts crewai built, testing guardrails and flow routing, what `crewai test` really does, event listeners for debugging, and the exact tracing/telemetry env var values. Use when writing tests for a crewai project, mocking or stubbing the LLM, writing a custom BaseLLM, seeing `TypeError: ... call() got an unexpected keyword argument 'from_task'`, `ValueError: OPENAI_API_KEY is required` in CI, `TraceGrantError` in pytest, running `crewai test`, adding a BaseEventListener, or setting CREWAI_TRACING_ENABLED / CREWAI_DISABLE_TELEMETRY / OTEL_SDK_DISABLED."
 ---
 
 # Test a CrewAI Project
@@ -8,6 +8,7 @@ description: "Deterministic, offline testing of CrewAI crews and flows with pyte
 How to test crews and flows deterministically, without API keys, and how to debug real runs with events and traces.
 
 Verified against crewai 1.15.22 and 1.15.23 on 2026-10-01.
+Live-tested on CrewAI AMP and real LLMs on 2026-10-01.
 Run `crewai version` first; if the major/minor differs, re-verify the version-sensitive rows with the `ask-docs` skill.
 
 ---
@@ -42,6 +43,7 @@ Test in tiers:
 | Accept `from_task`, `from_agent`, `response_model` (or `**kwargs`) | `TypeError` at the first LLM call |
 | Pass a non-empty `model=` (e.g. `MyLLM(model="my-model")`) | `ValidationError` at construction |
 | Call `self._emit_call_started_event(...)` / `self._emit_call_completed_event(...)` inside `with llm_call_context():` (from `crewai.llms.base_llm`) | event listeners and traces never see the LLM calls (see section 9) |
+| Forward only `role` and `content` if you pass `messages` to a provider SDK | crewai adds `cache_breakpoint: True` to each message; the Anthropic API rejects it with `400 ... messages.0.cache_breakpoint: Extra inputs are not permitted` |
 | `supports_function_calling()` returning False | crewai uses the ReAct text loop for tools (`Thought / Action / Action Input`) |
 | Return a validated model instance when `response_model` is passed | native providers do this; returning text also works, but see section 6 for how a guardrail then sees `output.pydantic` |
 
@@ -67,9 +69,10 @@ from pathlib import Path
 # Without them the socket guard below does not cover everything:
 # - crewai telemetry is still sent to telemetry.crewai.com when the test process
 #   exits, after the guard has been undone;
-# - if the test job sets CREWAI_TRACING_ENABLED=true and a CrewAI token (for example
-#   CREWAI_USER_PAT) is present, kickoff requests a trace upload, the guard refuses
-#   it, and the test fails with TraceGrantError.
+# - if tracing is on (CREWAI_TRACING_ENABLED=true or tracing=True) and a CrewAI
+#   credential exists (CREWAI_USER_PAT, or just a saved `crewai login` on the
+#   machine), kickoff requests a trace grant, the guard refuses it, and the test
+#   fails with TraceGrantError.
 # If uncommented, they must run before crewai is imported; never put them in the project's .env.
 # os.environ["CREWAI_DISABLE_TELEMETRY"] = "true"
 # os.environ["CREWAI_TRACING_ENABLED"] = "false"
@@ -169,6 +172,7 @@ Rules that keep stub tests stable:
 | `output_pydantic` is what fills `out.pydantic` | `Task(response_model=X)` alone sends the schema to the LLM but leaves `out.pydantic` as `None` |
 | Count calls with `len(llm.calls)`, not `out.token_usage` | Crew usage is summed per agent, so one stub shared by 2 agents is counted twice |
 | When the call order is hard to predict, use `responder` and decide on `response_model` or prompt text | A queue only works if you know the exact call order |
+| Build a fresh crew for `kickoff_for_each` | On a crew that was already kicked off, every item silently reuses the previous kickoff's inputs |
 
 ---
 
@@ -339,10 +343,12 @@ When a flow step builds a crew itself, as the `crewai create flow` scaffold does
 |---|---|
 | What it runs | `uv run test <n> <model>`, i.e. the project's `main.test()`, which calls `Crew.test(n_iterations, eval_llm=model, inputs=...)` |
 | Defaults | `-n 3`, `-m gpt-5.4-mini` (older docs say 2 and `gpt-4o-mini`) |
-| Each iteration | a full real kickoff of the crew with its own LLMs |
-| Scoring | an evaluator agent driven by the `-m` model scores every task from 1 to 10 and prints a table |
-| Needs | keys for the crew's model AND the judge model. Without them: `An error occurred while testing the crew: OPENAI_API_KEY is required` |
-| Side effects | it replaces each task's `callback` on the copy of the crew it runs |
+| Judge model | `-m` takes any provider string, although `--help` says only OpenAI models: `crewai test -m anthropic/claude-haiku-4-5` works when the project has the provider extra (`uv add "crewai[anthropic]"`) |
+| Each iteration | a full real kickoff of the crew with its own LLMs, plus one judge call per task |
+| Scoring | an evaluator agent driven by the `-m` model scores every task from 1 to 10 and prints a `Tasks/Crew/Agents` table: one row per task, a `Crew` row, `Execution Time (s)`, one column per run and `Avg. Total` |
+| Needs | keys for the crew's model AND the judge model. The judge runs after the first task, so that task has already run (and billed) when a missing judge key fails: `An error occurred while testing the crew: OPENAI_API_KEY is required`, or `Error code: 401` for an invalid key |
+| Exit code | `0` even when the run fails, so CI cannot rely on it |
+| Side effects | it replaces each task's `callback` on the copy of the crew it runs; logs `Sync handler error in on_crew_test_result` once per task score, which does not fail the run |
 | Flow projects | the flow scaffold has no `test` script, so `uv run test` hits the shell's `test` builtin: `test: 1: unexpected operator` |
 
 Use it for a periodic prompt-quality check against a real model. Do not use it as CI, because it costs money and its scores are not deterministic. `Crew.test` accepts a `BaseLLM` as `eval_llm`, so with stubs for both the crew and the judge it runs offline. That checks only the wiring ([example-tests.md](references/example-tests.md) section 4).
@@ -358,6 +364,7 @@ Subclass `BaseEventListener`, implement `setup_listeners(self, bus)`, and regist
 In tests, register listeners inside `with crewai_event_bus.scoped_handlers():` so they are removed afterwards. Call `crewai_event_bus.flush()` before asserting, because handlers run on worker threads.
 
 - To debug a real run, put the listener in its own module and import it from `main.py`, so it is instantiated once. Other useful events: `LLMCallFailedEvent`, `MemorySaveFailedEvent`, `CrewKickoffStartedEvent`, `FlowFinishedEvent`.
+- `LLMCallCompletedEvent.response` is the text, or for a native tool call the provider's list of tool-use blocks. `event.model` and `event.usage` carry the model and token counts.
 - **A custom `BaseLLM` must emit its own LLM call events.** The built-in providers emit `LLMCallStartedEvent` / `LLMCallCompletedEvent`. A subclass that only returns text emits nothing, and the trace listener subscribes to the same events, so listeners and traces both miss every LLM call.
 
 ---
@@ -374,13 +381,18 @@ They are two separate systems. **Telemetry** is anonymous usage stats sent to Cr
 | `CREWAI_TRACING_ENABLED` | `true` / `1` force tracing on. `false` / `0` force it off. `yes`, `on`, `no`, `off` are **ignored** and fall through to saved consent | per-process tracing gate |
 | `tracing=True/False` on `Crew(...)` or `Flow` | bool | beats the env var |
 
-Tracing precedence: the `tracing=` argument, then `CREWAI_TRACING_ENABLED`, then the consent saved by `crewai traces enable|disable`. Saved consent is stored per project directory name (or per `CREWAI_STORAGE_DIR`), so renaming the checkout resets it. `crewai traces status` shows the effective state.
+Tracing precedence: the `tracing=` argument, then `CREWAI_TRACING_ENABLED`, then the consent saved by `crewai traces enable|disable`. Saved consent is stored per project directory name (or per `CREWAI_STORAGE_DIR`), so renaming the checkout resets it. `crewai traces status` shows the env var (`false` when unset) and the saved consent, not whether you are logged in.
 
 Rules:
 
 - **Disable observability only in tests, and only when the user chooses to.** Put the switches in `tests/conftest.py` or the CI test job's environment. Never put them in the project's `.env`, `main.py`, or a deployment's env vars, because that blinds production debugging.
 - Spell the values `true` / `false`. `true` is the only spelling every disable switch fully honors, and `CREWAI_TRACING_ENABLED` ignores `yes`/`no`/`on`/`off`.
-- To debug one run, use `CREWAI_TRACING_ENABLED=true crewai run` or `tracing=True`. What happens next depends on the release. On 1.15.22, before any consent is saved, crewai keeps the trace in memory and asks `Share this execution trace with CrewAI? [y/N]`. On 1.15.23, in an interactive terminal, turning tracing on counts as consent: the trace is uploaded with no prompt and consent is saved on the first run (the `[y/N]` prompt remains only for first-run auto-collection). On both, without an interactive terminal (CI, pytest), a run with no CrewAI auth token discards its trace instead of uploading it, so do not rely on tracing to capture an unauthenticated CI run.
+- To debug one run, use `CREWAI_TRACING_ENABLED=true crewai run` or `tracing=True`. Where the trace goes depends on whether a CrewAI credential exists: `CREWAI_USER_PAT`, or a saved `crewai login` (no PAT needed).
+  - **With a credential:** kickoff first requests a trace grant, then uploads the trace to CrewAI AMP under that login, with or without a terminal. 1.15.23 then prints a `View traces:` link; 1.15.22 prints none. If the grant request fails, kickoff raises `TraceGrantError` before the crew runs.
+  - **Without a credential, 1.15.23, interactive terminal:** turning tracing on counts as consent. The trace uploads as an ephemeral trace with no prompt and an `Ephemeral Execution Traces` link is printed. Nothing is saved as consent.
+  - **Without a credential, 1.15.22, interactive terminal:** crewai asks `Share this execution trace with CrewAI? [y/N]` after the run.
+  - **Without a credential, no terminal (CI, pytest, `< /dev/null`):** the trace is discarded, on both releases.
+  - **No switch at all, first run:** crewai auto-collects locally, asks `Share this execution trace with CrewAI? [y/N] (20s timeout)` in a terminal, and saves the answer as consent.
 - From 1.15.23, crewai wraps every `BaseLLM` subclass's `call` in a rate-limit retry: a stub that raises an error mentioning "rate limit" or 429 is called 3 times over about 3 s before the error surfaces. To test your own rate-limit handling, raise a different error type, or assert on the retried call count.
 - Traces contain task text, inputs and outputs. Use synthetic data in traced runs unless your data may leave the machine.
 
@@ -401,6 +413,8 @@ Rules:
 | Listener counts grow across tests | handlers registered globally | `crewai_event_bus.scoped_handlers()` + `flush()` |
 | `token_usage` is double the call count | one LLM instance shared by several agents | assert on `len(llm.calls)` |
 | New dirs under the user data dir after tests | `CREWAI_STORAGE_DIR` unset at import time | set it to an absolute path at the top of `conftest.py` |
+| `TraceGrantError: AMP trace grant request failed (RuntimeError)` in pytest | tracing on + a saved `crewai login` or `CREWAI_USER_PAT` + the socket guard | `CREWAI_TRACING_ENABLED=false` in `conftest.py` (tests only) |
+| `crewai test` "passed" in CI but scored nothing | it exits 0 even when the run fails | check its output for the score table |
 | Tracing still runs with `OTEL_SDK_DISABLED=1` | `1` disables telemetry only; only `true` also blocks tracing | `CREWAI_TRACING_ENABLED=false` (tests only) |
 
 ---
