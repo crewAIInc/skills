@@ -208,7 +208,7 @@ Consequences:
 In 1.15.22-1.15.23 the native timeouts are module constants. No field on `MCPServerStdio`, `MCPServerHTTP`, `MCPServerSSE` or `Agent` changes them. So:
 - Keep MCP tool calls well under 30 s. Make them idempotent, because a timed-out call is re-sent. For long jobs, return a job id from one tool and poll with another.
 - Prefer config objects to `https://` strings in production: they fail loudly at kickoff instead of silently dropping tools.
-- `https://` strings discover tools with `asyncio.run()`. Inside a running event loop that fails and the agent gets **zero tools with no error** (only `RuntimeWarning: coroutine 'MCPToolResolver._get_mcp_tool_schemas_async' was never awaited`). Seen live with `await crew.akickoff()` and on a CrewAI AMP deployment - the model then invented tool calls in its answer while the run reported SUCCESS. The same server as `MCPServerHTTP(url=...)` worked in both places. Sync `crew.kickoff()`, including from a sync Flow step, resolves strings fine.
+- `https://` strings discover tools with `asyncio.run()`. Inside a running event loop that fails and the agent gets **zero tools with no error** (only `RuntimeWarning: coroutine 'MCPToolResolver._get_mcp_tool_schemas_async' was never awaited`). Seen live with `await crew.akickoff()` and on a CrewAI AMP deployment - the agent runs without the tools, and its answer may describe tool calls it never made. The same server as `MCPServerHTTP(url=...)` worked in both places. Sync `crew.kickoff()`, including from a sync Flow step, resolves strings fine.
 - An MCP result with `isError: true` reaches the agent as text. It is recorded as a `mcp_error` tool failure, and `tool_failure_policy="raise"` turns it into `ToolExecutionFailedError`.
 
 ---
@@ -272,7 +272,7 @@ Rules:
 | `ValidationError ... Invalid MCP reference: 'http://localhost:8000/mcp'` | Strings must be `https://` or a slug | `MCPServerHTTP(url="http://localhost:8000/mcp")` |
 | `Anthropic function name '127_0_0_1_...' must start with a letter or underscore` | MCP server URL uses an IP address | Use a hostname (`localhost`) |
 | `https://` string MCP gives no tools under `akickoff()` or on AMP; the answer invents tool calls | String refs cannot resolve inside a running event loop | `MCPServerHTTP(url=...)` |
-| `GET /status` returns 500 `Internal Server Error` for a deployed run | The run hit `MCPConnectionError` (stdio file/command missing, wrong URL) | Fix the MCP connection; run the crew locally to see the error |
+| `GET /status` keeps failing or the run never completes | The run may have hit `MCPConnectionError` (stdio command or file missing, wrong URL) | Run the crew locally to see the error; fix the MCP connection |
 | `tool_filter` keeps nothing | Filter used the server's camelCase name | Use the sanitized name (`get_forecast`) |
 | Run hangs at "Would you like to install it? [y/N]" | Missing optional package (`crewai-tools[mcp]`, `exa-py`, ...) | Install the extra before running |
 | Tool ran 3 times / side effect repeated | Native MCP call exceeded 30 s and was retried | Keep calls short and idempotent |

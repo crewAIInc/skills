@@ -87,7 +87,7 @@ if __name__ == "__main__":
 | `uv.lock` missing | `missing_lockfile` error | `uv lock`, then `git add uv.lock` |
 | Edited `pyproject.toml` after locking | `stale_lockfile` warning (does not block) - deployed deps may differ from local. The check compares file times, and the CLI itself writes `[tool.crewai] project_id` into `pyproject.toml` when it is missing, which also triggers it | Re-run `uv lock` after every `pyproject.toml` edit and commit both |
 | Importing code from a sibling dir (`../shared_lib`) via `sys.path` | Validate passes locally, but only the project root is uploaded: the AMP build fails with `ModuleNotFoundError: No module named 'helpers'` and status `Automation error, fix the code and deploy again.` | Move shared code inside `src/<pkg>/` or publish it as a package dependency |
-| `anthropic/...` model with plain `crewai[tools]` | Locally: `Anthropic native provider not available, to install: uv add "crewai[anthropic]"`; validate reports it only as `@CrewBase not found` / `No Flow subclass found`, so `create` and `push` refuse the project | `uv add "crewai[anthropic]"` so the extra lands in `pyproject.toml` and `uv.lock`. (A `--skip-validate` deploy without the extra still ran on AMP on 2026-10-01 because the platform image installed `anthropic` itself - do not rely on that) |
+| `anthropic/...` model with plain `crewai[tools]` | Locally: `Anthropic native provider not available, to install: uv add "crewai[anthropic]"`; validate reports it only as `@CrewBase not found` / `No Flow subclass found`, so `create` and `push` refuse the project | `uv add "crewai[anthropic]"` so the extra lands in `pyproject.toml` and `uv.lock`. |
 
 Keep data files inside `src/<pkg>/` and load them as package data, not with paths built from the repo root. Files under `src/<pkg>/` go into the wheel the scaffold builds; files at the project root do not.
 
@@ -122,9 +122,9 @@ See [validate-checks.md](references/validate-checks.md) for every check and code
 | Dashboard, GitHub connection | The repository and branch you pick (optional auto-deploy on new commits) | What you enter in the dashboard |
 | Dashboard, ZIP upload | The ZIP you choose | What you enter in the dashboard |
 
-`push` decides by your **local** `origin`, while AMP builds from the source the deployment was **created** with (the CLI looks for a source flag in the status response, but on 2026-10-01 AMP reported only `source_type`, so the CLI fell back to the local check). When the two disagree, `push` prints success and you get the wrong code:
+`push` decides between a ZIP upload and a rebuild from your **local** `origin`, while AMP builds from the source the deployment was **created** with. If the two disagree, the push can succeed without shipping your changes:
 
-| Deployment created as | Local state at `push` | What actually happened (live, 2026-10-01) |
+| Deployment created as | Local state at `push` | Result |
 |---|---|---|
 | ZIP | `origin` added later | No ZIP uploaded; AMP rebuilt the **last uploaded** ZIP. Working-tree code and `.env` changes were not deployed, status went back to `Crew is Online` |
 | Git | `origin` removed | CLI uploaded a ZIP and `.env`; AMP ignored the ZIP and cloned the repository again |
@@ -133,7 +133,7 @@ Rules that follow from this:
 
 - Never add or remove `origin` on a project after `create`. For a ZIP deployment, a correct push prints `Preparing project ZIP...` and `Uploading project ZIP...`; if those lines are missing, nothing new shipped.
 - Git-based: `git commit` and `git push` before `crewai deploy push`, or the build runs your last pushed code.
-- ZIP-based: the ZIP holds files Git tracks plus untracked files that are not ignored, and always drops `.env`, `.env.*` (except `.env.example` / `.env.sample`), `.git`, `.venv`, caches, `build/` and `dist/`. Add run outputs (`report.md`, `output/`) and scratch files to `.gitignore`, or they ship (an untracked `scratch.txt` was present in the running deployment). Do not depend on root-level dotfiles at runtime: `.gitignore` and `.env.example` were in the ZIP but absent from the deployed project root.
+- ZIP-based: the ZIP holds files Git tracks plus untracked files that are not ignored, and always drops `.env`, `.env.*` (except `.env.example` / `.env.sample`), `.git`, `.venv`, caches, `build/` and `dist/`. Add run outputs (`report.md`, `output/`) and scratch files to `.gitignore`, or they ship. Do not depend on root-level dotfiles at runtime: `.gitignore` and `.env.example` were in the ZIP but absent from the deployed project root.
 - If the directory has no commits yet (the scaffold runs `git init` but does not commit), `create`/`push` commits everything not ignored as "Initial crew". If `uv.lock` is missing, validation's own `uv run` creates it before the upload (and `create`/`push` fall back to `crewai install`).
 - Only the project root is packaged. Monorepo subfolders need a working directory set in the dashboard (the CLI create flow has no such option).
 - `push` without `--uuid` finds the deployment by `[project].name` in the selected org. Deployment names are not unique in an org, so keep the name stable and prefer `--uuid` in scripts.
@@ -157,8 +157,6 @@ What the CLI does with local `.env`:
 | `.env` present on a ZIP `push` (no local `origin`) | The same, and the deployment's variables are **replaced** by exactly this set: a key missing from `.env` is deleted from the deployment |
 | `.env` absent | No env fields at all (it prints `Error: .env not found.` and carries on); the deployment keeps its current variables |
 | `push` with a local `origin` | Never sends env vars - change values in the dashboard |
-
-Live on 2026-10-01: a ZIP push with a `.env` holding only `DTA_MARKER=...` removed `ANTHROPIC_API_KEY` from the deployment, and the next kickoff failed with `ValueError: ANTHROPIC_API_KEY is required`, while status still read `Crew is Online`.
 
 Values are sent verbatim: `MAX_CASES=3  # note` arrives as `3  # note` (python-dotenv locally strips the comment and gives `3`, so local runs hide this), and `QUOTED="abc"` arrives with the quotes. Write `.env` with bare values and no inline comments.
 

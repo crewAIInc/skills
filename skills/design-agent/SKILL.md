@@ -24,10 +24,10 @@ Exact API forms (imports, defaults, provider extras, structured output) are in t
 
 **Default to ONE agent.** Add more only when the task genuinely splits into work that requires:
 
-- **Different tools or permissions** - e.g. one agent has Slack write access, another reads docs only.
-- **Different personas the LLM must clearly switch between** - a writer's voice is not a researcher's voice.
-- **Different LLMs** - a cheap model for mechanical steps, a stronger one for synthesis.
-- **Different guardrails or output schemas** - separate agents make the contract per stage explicit.
+- **Different tools or permissions** — e.g. one agent has Slack write access, another reads docs only.
+- **Different personas the LLM must clearly switch between** — a writer's voice is not a researcher's voice.
+- **Different LLMs** — a cheap model for mechanical steps, a stronger one for synthesis.
+- **Different guardrails or output schemas** — separate agents make the contract per stage explicit.
 
 **DO NOT add an agent just because the workflow has multiple steps.** A single agent can call multiple tools in sequence within one kickoff (search → scrape → summarize is one agent's loop), produce structured multi-section output in one response, and iterate via its own tool-use loop.
 
@@ -42,7 +42,7 @@ scraper       = Agent(role="Scrapes URLs via Firecrawl scrape", tools=[firecrawl
 writer        = Agent(role="Writes the report")  # plus goal, backstory, llm
 ```
 
-✅ One researcher does the gathering loop; one writer synthesizes - two agents because the personas and LLMs genuinely differ:
+✅ One researcher does the gathering loop; one writer synthesizes — two agents because the personas and LLMs genuinely differ:
 ```python
 researcher = Agent(role="Web Researcher", tools=[firecrawl_search, firecrawl_scrape], llm="anthropic/claude-haiku-4-5")
 writer     = Agent(role="Technical Report Writer",                                    llm="anthropic/claude-sonnet-4-6")
@@ -76,7 +76,7 @@ Reach for `Crew.kickoff()` *only* when a step genuinely benefits from multi-agen
 
 Every agent needs three things: **who** it is, **what** it wants, and **why** it's qualified. `{placeholders}` in all three are filled from `crew.kickoff(inputs={...})`.
 
-### Role - Who the Agent Is
+### Role — Who the Agent Is
 
 The role defines the agent's area of expertise. **Be specific, not generic.**
 
@@ -88,7 +88,7 @@ The role defines the agent's area of expertise. **Be specific, not generic.**
 
 The role directly shapes how the LLM reasons. A "Senior Data Researcher" will produce different output than a "Research Assistant" even with the same task.
 
-### Goal - What the Agent Wants
+### Goal — What the Agent Wants
 
 The goal is the agent's individual objective. It should be **outcome-focused with quality standards**.
 
@@ -98,7 +98,7 @@ The goal is the agent's individual objective. It should be **outcome-focused wit
 | `Write content` | `Produce publication-ready technical articles that explain complex topics clearly for non-technical readers` |
 | `Analyze data` | `Deliver actionable risk assessments with confidence levels and recommended mitigations` |
 
-### Backstory - Why the Agent Is Qualified
+### Backstory — Why the Agent Is Qualified
 
 The backstory establishes expertise, experience, values, and working style. It's the agent's "personality prompt."
 
@@ -129,7 +129,7 @@ Agent(
     max_execution_time=300,  # Seconds, crew tasks only (default: None - no limit)
     max_rpm=10,              # Max LLM calls per minute for this agent (default: None)
     max_retry_limit=2,       # Retries when task execution errors (default: 2)
-    allow_delegation=False,  # Default: False - agent works alone
+    allow_delegation=False,  # Default: False — agent works alone
     respect_context_window=True,  # Summarize and continue on overflow (default: True)
     inject_date=False,       # Put today's date in the prompt (default: False; format via date_format)
     verbose=False,           # Detailed execution logs (default: False)
@@ -212,7 +212,7 @@ PlanningConfig(
 
 **When to enable:** for autonomous loops where the agent picks its own steps and you want failure recovery (a coding agent that writes → runs → patches; a research agent that searches → scrapes → revises). **Skip** it for single-tool, single-purpose calls ("summarize this string", "post this Slack DM").
 
-**Cost (measured):** a two-tool arithmetic task ("multiply, then add") on `claude-haiku-4-5` took **3** LLM calls without planning, **6** with `"low"`, **7** with `planning=True` and **10** with `"medium"`. The medium run also repeated a completed step and reported a wrong total, and both planned runs wrapped the answer in prose about the plan. Planning multiplies calls on small tasks and can make them worse - measure before turning it on, and before defaulting to `high`.
+**Cost:** In one measured run, planning added 3-7 calls to a two-step task and wrapped the answer in prose. Measure on your own tasks before turning it on.
 
 ### Code Execution
 
@@ -234,7 +234,7 @@ result = agent.kickoff("...")   # the agent guardrail runs here
 
 A guardrail can also be a string, which is checked by an extra LLM call. Agent guardrails have two limits on 1.15.23, both verified with a real LLM:
 - **They run only on `Agent.kickoff()`.** When the same agent executes a `Task` in a `Crew`, the agent guardrail is never called.
-- **The retry does not pass your feedback to the LLM.** The retried call sends the same messages as the first, so the agent cannot learn what was wrong: three attempts all failed the uppercase check above. When retries run out, `kickoff` raises `ValueError: Agent's guardrail failed validation after N retries. Last error: ...`.
+- **On crewai 1.15.23 the agent-level guardrail retry re-sent the original prompt without the feedback**, and all three attempts failed the uppercase check above. Prefer a task-level guardrail, which passes the feedback. When retries run out, `kickoff` raises `ValueError: Agent's guardrail failed validation after N retries. Last error: ...`.
 
 When output must be fixed and not just rejected, put the guardrail on the **Task** (`Task(guardrail=..., guardrail_max_retries=...)`). The error message is fed back there, and the same uppercase check passed on the second attempt. See `design-task` and **check-crewai-api**.
 
@@ -297,7 +297,7 @@ Verified live: `llm` and `max_iter` set in YAML are applied, `{topic}` in the ro
 
 ---
 
-## 4. Agent.kickoff() - Direct Agent Execution
+## 4. Agent.kickoff() — Direct Agent Execution
 
 Use `Agent.kickoff()` when you need one agent with tools and reasoning, without crew overhead. This is the most common pattern in Flows. It does not use the agent's knowledge sources or `max_execution_time` (Section 2).
 
@@ -314,7 +314,7 @@ researcher = Agent(
 )
 
 result = researcher.kickoff("What are the latest developments in quantum computing?")
-print(result.raw)             # str - the agent's full response
+print(result.raw)             # str — the agent's full response
 print(result.usage_metrics)   # dict: total_tokens, prompt_tokens, completion_tokens, ...
 
 class ResearchFindings(BaseModel):
@@ -405,7 +405,7 @@ Before deploying an agent, verify:
 - [ ] **Goal** includes desired outcome AND quality standards
 - [ ] **Backstory** establishes expertise and working style
 - [ ] **Tools** are assigned for any task requiring external data
-- [ ] **No excess tools** - 3-5 per agent maximum
+- [ ] **No excess tools** — 3-5 per agent maximum
 - [ ] **max_iter** is tuned for expected task complexity (10-15 for simple, 20-25 for complex)
 - [ ] **Timeouts** are set where time is spent (LLM `timeout`, tool timeouts); `max_execution_time` is only a backstop for crew tasks
 - [ ] **Guardrails** for critical outputs are on the Task
@@ -419,7 +419,7 @@ Before deploying an agent, verify:
 
 For deeper dives into specific topics, see:
 
-- [Custom Tools](references/custom-tools.md) - building your own tools with `@tool` decorator and `BaseTool` subclass
+- [Custom Tools](references/custom-tools.md) — building your own tools with `@tool` decorator and `BaseTool` subclass
 - [Memory & Knowledge](references/memory-and-knowledge.md) - memory, knowledge sources, embedders that work without OpenAI, storage, scoping
 
 For related skills:
@@ -428,6 +428,6 @@ For related skills:
 - **connect-tools-and-mcp** - custom tools, real `crewai_tools` names, caching, MCP servers
 - **build-flow** - Flow state, routing, persistence, conversational flows
 - **getting-started** - project scaffolding, choosing the right abstraction
-- **design-task** - task description/expected_output best practices, guardrails, structured output, dependencies
+- **design-task** — task description/expected_output best practices, guardrails, structured output, dependencies
 - **test-crewai-project** - testing agents and crews offline with a stub LLM
 - **ask-docs** - query the live CrewAI docs for questions not covered by these skills

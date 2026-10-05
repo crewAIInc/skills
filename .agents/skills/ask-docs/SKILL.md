@@ -1,6 +1,6 @@
 ---
 name: ask-docs
-description: "Query the official CrewAI documentation for answers. Use when the user has a CrewAI question that isn't fully covered by the other CrewAI skills in this plugin — e.g., specific API details, configuration options, advanced features, troubleshooting errors, enterprise features, tool references, or anything where the latest docs are the best source of truth."
+description: "Query the official CrewAI documentation for answers. Use when the user has a CrewAI question that isn't fully covered by the getting-started, design-agent, design-task skills — e.g., specific API details, configuration options, advanced features, troubleshooting errors, enterprise features, tool references, or anything where the latest docs are the best source of truth."
 ---
 
 # Ask CrewAI Docs
@@ -64,7 +64,7 @@ The `docs.crewai.com/mcp` server needs no authentication. It exposes:
 
 In Claude Code the tools appear as `mcp__<server-name>__search_crew_ai` (for example `mcp__crewai-docs__search_crew_ai`). The platform server has the same shape with a `_platform` suffix: `search_crew_ai_platform`, `query_docs_filesystem_crew_ai_platform`.
 
-Rules learned from live use:
+Rules:
 
 - **Always pass `version`** with a leading `v`, e.g. `"version": "v1.15.23"`. Without it, results mix `edge` and every hosted release (1.10.0 onward), often old ones first. `"1.15.23"` without the `v` returns "No results found".
 - The filesystem is laid out as `/<version>/<lang>/<path>.mdx` (`/v1.15.23/en/concepts/knowledge.mdx`, `/edge/en/...`) plus `/openapi/<version>/enterprise-api.en.yaml`. `rg -l "restore_from_state_id" /v1.15.23/en` finds every page that mentions a symbol.
@@ -103,9 +103,9 @@ The docs live in the public `crewAIInc/crewAI` repo under `docs/<version>/<lang>
 
 ---
 
-## Docs can be wrong: check against the installed package
+## Check docs snippets against the installed package
 
-The docs are the best index of what exists, not proof that a snippet runs. Example found on 2026-10-01: the "Forking Persisted State" example in the v1.15.23 Mastering Flow State guide decorates the class with bare `@persist`. On crewai 1.15.23 that raises `TypeError: persist.<locals>.decorator() missing 1 required positional argument: 'target'` when the flow is created. `@persist()` works.
+The docs are the best index of what exists, not proof that a snippet runs. For example, check decorator call forms such as `@persist()` against the installed version.
 
 Before giving the user code that matters:
 
@@ -148,7 +148,7 @@ Other good uses:
 
 ## Setting Up the Docs MCP Server (optional)
 
-Path B works with no setup. For structured search, add the server to the coding agent. Each of these was run on 2026-10-01 against a throwaway config directory.
+Path B works with no setup. For structured search, add the server to the coding agent.
 
 **Claude Code** (`claude mcp add`):
 
@@ -194,9 +194,9 @@ Other agents: add `https://docs.crewai.com/mcp` as a remote (streamable HTTP) MC
 
 ## Related Skills
 
-- **getting-started** - project scaffolding, choosing abstractions, Flow architecture
+- **getting-started** — project scaffolding, choosing abstractions, Flow architecture
 - **design-agent** - agent Role-Goal-Backstory, parameter tuning, tools, memory and knowledge
-- **design-task** - task descriptions, expected_output, guardrails, structured output, dependencies
+- **design-task** — task descriptions, expected_output, guardrails, structured output, dependencies
 - **check-crewai-api** - current 1.15.x API versus the 0.x API assistants remember
 - **build-flow** - Flow state, decorators, routing, persistence
 - **connect-tools-and-mcp** - custom tools, `crewai_tools`, MCP servers for agents

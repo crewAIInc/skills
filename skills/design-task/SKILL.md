@@ -21,14 +21,14 @@ For exact current API forms (imports, parameter names, structured output, guardr
 
 Every task needs two things: a **description** (what to do and how) and an **expected_output** (what the result looks like). Both are required - `Task(description=...)` alone raises `ValidationError ... expected_output Field required`.
 
-### Description - The Instructions
+### Description — The Instructions
 
 A good description includes:
-1. **What** to do - the core action
-2. **How** to do it - specific steps or approach
-3. **Context** - why this matters, what it feeds into
-4. **Constraints** - scope limits, things to avoid
-5. **Inputs** - what data or context is available
+1. **What** to do — the core action
+2. **How** to do it — specific steps or approach
+3. **Context** — why this matters, what it feeds into
+4. **Constraints** — scope limits, things to avoid
+5. **Inputs** — what data or context is available
 
 ```yaml
 research_task:
@@ -52,13 +52,13 @@ research_task:
   agent: researcher
 ```
 
-### Expected Output - The Success Criteria
+### Expected Output — The Success Criteria
 
 The `expected_output` tells the agent what "done" looks like. Be specific about:
-- **Format** - bullet points, paragraphs, JSON, table
-- **Structure** - sections, headings, order
-- **Length** - approximate word count or number of items
-- **Quality markers** - citations required, confidence levels, specific fields
+- **Format** — bullet points, paragraphs, JSON, table
+- **Structure** — sections, headings, order
+- **Length** — approximate word count or number of items
+- **Quality markers** — citations required, confidence levels, specific fields
 
 | Bad Expected Output | Good Expected Output |
 |---|---|
@@ -199,7 +199,7 @@ Task(..., callback=log_completion)  # called with the TaskOutput after the task 
 
 ---
 
-## 4. Task Guardrails - Quality Control
+## 4. Task Guardrails — Quality Control
 
 Guardrails validate task output before it passes to the next step. If validation fails, the error is fed back to the agent and the task retries, up to `guardrail_max_retries` (default 3). After that the task raises `Task failed guardrail validation after N retries. Last error: ...`.
 
@@ -433,7 +433,7 @@ Before running a task, verify:
 
 - [ ] **Description** includes what, how, context, and constraints
 - [ ] **Expected output** specifies format, structure, and quality markers
-- [ ] **Single purpose** - one clear objective per task
+- [ ] **Single purpose** — one clear objective per task
 - [ ] **Agent assigned** (required in sequential crews and for string guardrails)
 - [ ] **Dependencies** set via `context` where the default (all prior outputs) is wrong
 - [ ] **Tools** provided for any task requiring external data
@@ -441,7 +441,7 @@ Before running a task, verify:
 - [ ] **Guardrails** set for critical outputs, returning `(bool, value)`
 - [ ] **Async tasks** each on their own agent, followed by a synchronous task
 - [ ] **Variables** in YAML match the `inputs` dict keys
-- [ ] **Expected output is achievable** - test with a simple run before adding complexity
+- [ ] **Expected output is achievable** — test with a simple run before adding complexity
 
 ---
 
@@ -454,8 +454,8 @@ For deeper dives into specific topics, see:
 For related skills:
 
 - **check-crewai-api** - current imports, parameter names, structured output and guardrail forms for crewai 1.15.x
-- **getting-started** - project scaffolding, choosing the right abstraction, Flow architecture
-- **design-agent** - agent Role-Goal-Backstory framework, parameter tuning, tool assignment, memory & knowledge configuration
+- **getting-started** — project scaffolding, choosing the right abstraction, Flow architecture
+- **design-agent** — agent Role-Goal-Backstory framework, parameter tuning, tool assignment, memory & knowledge configuration
 - **build-flow** - Flow state, routers and `@human_feedback`
 - **test-crewai-project** - testing guardrails and task wiring offline with a stub LLM
 - **connect-tools-and-mcp** - the tools you attach to tasks, and which `crewai_tools` names exist

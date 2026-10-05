@@ -21,7 +21,7 @@ Exactly what `crewai deploy create` / `crewai deploy push` send to CrewAI AMP on
 3. If the status response carries the CLI's ZIP flag, it follows it: ZIP-based means a fresh ZIP plus every key in `./.env`; Git-based means a redeploy request.
 4. Otherwise it falls back to the local view - `origin` present means a redeploy request (nothing uploaded, no env vars), no `origin` means a ZIP upload with `.env` and no confirmation prompt.
 
-On CrewAI AMP on 2026-10-01 the status response carried `source_type` (`zip` / `github`) but not the flag the CLI 1.15.22-1.15.23 reads, so every push took step 4. AMP itself builds from the source chosen at create time. Observed live:
+On crewai 1.15.22-1.15.23, `push` takes step 4 in practice. AMP itself builds from the source chosen at create time. Observed live:
 
 | Deployment | Local state at `push` | CLI did | AMP did |
 |---|---|---|---|
@@ -46,7 +46,7 @@ Consequence: never change `origin` after create, and read the push output - `Pre
 
 Without Git available at all, the CLI walks the directory instead and `.gitignore` is not applied - only the fixed exclusions above.
 
-What the running deployment sees can be narrower than the ZIP. On 2026-10-01 a deployment whose ZIP root held `.env.example`, `.gitignore`, `README.md`, `pyproject.toml`, `untracked_scratch.txt` and `uv.lock` listed only `README.md`, `pyproject.toml`, `src`, `untracked_scratch.txt` and `uv.lock` at runtime. Untracked files ship; root-level dotfiles did not reach the runtime.
+Root-level dotfiles (`.gitignore`, `.env.example`) ship in the ZIP but may not be present in the running deployment's root; do not depend on them at runtime.
 
 Preview the file list before a ZIP deploy (matches the CLI's selection exactly on 1.15.22-1.15.23 in a Git checkout):
 
@@ -80,14 +80,7 @@ The `.env` reader is literal:
 | `push` with a local `origin` | None |
 | Any path with no `.env` file | None (prints `Error: .env not found.` and continues); existing deployment variables are kept |
 
-Live on 2026-10-01 (ZIP deployment, a crew that reports which marker variables it sees):
-
-| Push | Result at the next kickoff |
-|---|---|
-| `.env` = key + `DTA_MARKER=env-v2` + `DTA_NOTE=3  # note` | `DTA_MARKER='env-v2'`, `DTA_NOTE='3  # note'` (comment kept) |
-| no `.env` | unchanged: `DTA_MARKER='env-v2'`, key present |
-| `.env` = `DTA_MARKER=env-v4-subset` only | `FAILED`: `ValueError: ANTHROPIC_API_KEY is required` |
-| `.env` = key + `DTA_MARKER=env-v5` | `DTA_NOTE='unset'` - the earlier variable was gone |
+Example: pushing a `.env` that lacks `ANTHROPIC_API_KEY` removes it from the deployment; status stays `Crew is Online` and the next kickoff fails with `ValueError: ANTHROPIC_API_KEY is required`.
 
 Practices:
 

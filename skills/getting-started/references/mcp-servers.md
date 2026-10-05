@@ -1,6 +1,6 @@
 # MCP Servers Reference
 
-How to use official MCP (Model Context Protocol) servers in CrewAI - prefer these over native `crewai_tools` when an official server exists.
+How to use official MCP (Model Context Protocol) servers in CrewAI — prefer these over native `crewai_tools` when an official server exists.
 
 Verified against crewai 1.15.23 on 2026-10-01 (string refs, `#tool` filters and `MCPServerHTTP` discovery were run against the public Exa MCP server; `MCPServerStdio` with `tool_filter` against `uvx mcp-server-time`). The **connect-tools-and-mcp** skill covers the same API in more depth.
 
@@ -10,10 +10,10 @@ Verified against crewai 1.15.23 on 2026-10-01 (string refs, `#tool` filters and 
 
 Official MCP servers are **maintained by the service providers themselves** (GitHub, Stripe, Snowflake, etc.). This means:
 
-- **Always up to date** - API changes are reflected by the provider, not the crewAI community
-- **Richer tool coverage** - providers expose their full API surface, not just the subset crewAI wrapped
-- **Standardized protocol** - MCP is an open standard; tools are auto-discovered and integrated
-- **Less dependency bloat** - no need for per-service Python packages in your project
+- **Always up to date** — API changes are reflected by the provider, not the crewAI community
+- **Richer tool coverage** — providers expose their full API surface, not just the subset crewAI wrapped
+- **Standardized protocol** — MCP is an open standard; tools are auto-discovered and integrated
+- **Less dependency bloat** — no need for per-service Python packages in your project
 
 **Decision rule:** If an official MCP server exists for the service you need, use it. Fall back to native `crewai_tools` only when no official MCP server is available.
 
@@ -32,7 +32,7 @@ uv add "crewai-tools[mcp]"
 
 ## Attaching MCP Servers to Agents
 
-### Simple DSL - `mcps` Field (Recommended)
+### Simple DSL — `mcps` Field (Recommended)
 
 The `mcps` field on an Agent accepts string references or structured configs. This is the preferred approach.
 
@@ -72,7 +72,7 @@ Bare slugs (`"snowflake"`, `"stripe#..."`, `"github"`) are **CrewAI AMP integrat
 
 Use these when you need custom env vars, headers, or tool filtering.
 
-**Stdio - Local MCP Servers**
+**Stdio — Local MCP Servers**
 
 The server process does not inherit your environment: it gets only `HOME, LOGNAME, PATH, SHELL, TERM, USER` plus `env=`, so pass its API keys in `env` explicitly.
 
@@ -93,7 +93,7 @@ agent = Agent(
 )
 ```
 
-**HTTP - Remote MCP Servers**
+**HTTP — Remote MCP Servers**
 
 ```python
 from crewai.mcp import MCPServerHTTP
@@ -113,7 +113,7 @@ agent = Agent(
 )
 ```
 
-**SSE - Real-Time Streaming**
+**SSE — Real-Time Streaming**
 
 ```python
 from crewai.mcp import MCPServerSSE
@@ -172,7 +172,7 @@ agent = Agent(
     role="Full-Featured Researcher",
     goal="Research using all available sources",
     backstory="...",
-    tools=[SerperDevTool()],            # Native tool - no MCP alternative
+    tools=[SerperDevTool()],            # Native tool — no MCP alternative
     mcps=[                               # Official MCP servers
         "https://mcp.exa.ai/mcp",
         "github",                         # AMP-connected integration
@@ -234,7 +234,7 @@ server_params = StdioServerParameters(
     env={"GITHUB_PERSONAL_ACCESS_TOKEN": "<your-token>"},   # the variable this server reads
 )
 
-# Context manager (recommended) - auto-starts and stops
+# Context manager (recommended) — auto-starts and stops
 with MCPServerAdapter(server_params) as tools:
     agent = Agent(
         role="GitHub Analyst",

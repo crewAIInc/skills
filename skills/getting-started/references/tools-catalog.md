@@ -20,17 +20,17 @@ Some tools need an extra before they construct: `EXASearchTool`, `TavilySearchTo
 | `SerpApiGoogleSearchTool` | Google search via SerpApi | `SERPAPI_API_KEY` | `from crewai_tools import SerpApiGoogleSearchTool` |
 | `SerpApiGoogleShoppingTool` | Google Shopping search | `SERPAPI_API_KEY` | `from crewai_tools import SerpApiGoogleShoppingTool` |
 | `LinkupSearchTool` | Contextual search via Linkup | `LINKUP_API_KEY` | `from crewai_tools import LinkupSearchTool` |
-| `ArxivPaperTool` | Search arXiv for academic papers | - | `from crewai_tools import ArxivPaperTool` |
+| `ArxivPaperTool` | Search arXiv for academic papers | — | `from crewai_tools import ArxivPaperTool` |
 | `GithubSearchTool` | RAG search in GitHub repos | `gh_token` param | `from crewai_tools import GithubSearchTool` |
-| `CodeDocsSearchTool` | RAG search in code documentation | - | `from crewai_tools import CodeDocsSearchTool` |
+| `CodeDocsSearchTool` | RAG search in code documentation | — | `from crewai_tools import CodeDocsSearchTool` |
 
 ## Web Scraping
 
 | Tool | Purpose | Env Var | Import |
 |---|---|---|---|
-| `ScrapeWebsiteTool` | Extract website content via HTTP | - | `from crewai_tools import ScrapeWebsiteTool` |
-| `ScrapeElementFromWebsiteTool` | Scrape specific HTML elements via CSS selectors | - | `from crewai_tools import ScrapeElementFromWebsiteTool` |
-| `SeleniumScrapingTool` | Scrape dynamic JS-rendered content | - | `from crewai_tools import SeleniumScrapingTool` |
+| `ScrapeWebsiteTool` | Extract website content via HTTP | — | `from crewai_tools import ScrapeWebsiteTool` |
+| `ScrapeElementFromWebsiteTool` | Scrape specific HTML elements via CSS selectors | — | `from crewai_tools import ScrapeElementFromWebsiteTool` |
+| `SeleniumScrapingTool` | Scrape dynamic JS-rendered content | — | `from crewai_tools import SeleniumScrapingTool` |
 | `FirecrawlScrapeWebsiteTool` | High-performance scraping | `FIRECRAWL_API_KEY` | `from crewai_tools import FirecrawlScrapeWebsiteTool` |
 | `FirecrawlCrawlWebsiteTool` | Crawl entire websites | `FIRECRAWL_API_KEY` | `from crewai_tools import FirecrawlCrawlWebsiteTool` |
 | `FirecrawlSearchTool` | Search + extract with Firecrawl | `FIRECRAWL_API_KEY` | `from crewai_tools import FirecrawlSearchTool` |
@@ -60,8 +60,8 @@ Some tools need an extra before they construct: `EXASearchTool`, `TavilySearchTo
 | Tool | Purpose | Dependencies | Import |
 |---|---|---|---|
 | `NL2SQLTool` | Natural language to SQL | SQLAlchemy + driver | `from crewai_tools import NL2SQLTool` |
-| `MySQLSearchTool` | RAG search in MySQL | - | `from crewai_tools import MySQLSearchTool` |
-| `DatabricksQueryTool` | SQL queries on Databricks | - | `from crewai_tools import DatabricksQueryTool` |
+| `MySQLSearchTool` | RAG search in MySQL | — | `from crewai_tools import MySQLSearchTool` |
+| `DatabricksQueryTool` | SQL queries on Databricks | — | `from crewai_tools import DatabricksQueryTool` |
 | `SnowflakeSearchTool` | SQL queries on Snowflake | snowflake-connector | `from crewai_tools import SnowflakeSearchTool` |
 | `SingleStoreSearchTool` | SELECT queries on SingleStore | crewai-tools[singlestore] | `from crewai_tools import SingleStoreSearchTool` |
 
@@ -80,7 +80,7 @@ Some tools need an extra before they construct: `EXASearchTool`, `TavilySearchTo
 | `DallETool` | Generate images with DALL-E | `OPENAI_API_KEY` | `from crewai_tools import DallETool` |
 | `VisionTool` | Extract text from images | `OPENAI_API_KEY` | `from crewai_tools import VisionTool` |
 | `E2BPythonTool` / `DaytonaPythonTool` | Execute Python in a hosted sandbox (`CodeInterpreterTool` was removed) | E2B / Daytona account | `from crewai_tools import E2BPythonTool` |
-| `RagTool` | General-purpose RAG for any data source | - | `from crewai_tools import RagTool` |
+| `RagTool` | General-purpose RAG for any data source | — | `from crewai_tools import RagTool` |
 | `LlamaIndexTool` | Wrap LlamaIndex tools/query engines | llama-index | `from crewai_tools import LlamaIndexTool` |
 
 ## Cloud & AWS

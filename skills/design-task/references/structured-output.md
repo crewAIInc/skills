@@ -19,7 +19,7 @@ Structured output works differently at each abstraction level:
 
 ---
 
-## 1. LLM.call() - Direct Pydantic Return
+## 1. LLM.call() — Direct Pydantic Return
 
 ```python
 from crewai import LLM
@@ -47,7 +47,7 @@ print(result.confidence)  # 0.95
 
 ---
 
-## 2. Agent.kickoff() - LiteAgentOutput Wrapper
+## 2. Agent.kickoff() — LiteAgentOutput Wrapper
 
 ```python
 from crewai import Agent
@@ -70,7 +70,7 @@ result = researcher.kickoff(
     response_format=ResearchFindings,
 )
 
-# Returns LiteAgentOutput - access via .pydantic
+# Returns LiteAgentOutput — access via .pydantic
 # Agent.kickoff takes response_format (response_model raises TypeError here)
 print(result.pydantic.main_points)   # list[str]
 print(result.pydantic.sources)       # list[str]
@@ -80,7 +80,7 @@ print(result.usage_metrics)          # Token usage dict
 
 ---
 
-## 3. Task - output_pydantic / output_json
+## 3. Task — output_pydantic / output_json
 
 ### output_pydantic
 
@@ -130,7 +130,7 @@ task = Task(
 ```python
 result = crew.kickoff(inputs={"topic": "AI"})
 
-result.json_dict            # dict - parsed JSON
+result.json_dict            # dict — parsed JSON
 result.json_dict["title"]   # str
 ```
 
@@ -145,7 +145,7 @@ result.json_dict["title"]   # str
 
 ---
 
-## 4. Crew.kickoff() - CrewOutput
+## 4. Crew.kickoff() — CrewOutput
 
 The crew's output comes from the **last task** in the sequence:
 
@@ -153,7 +153,7 @@ The crew's output comes from the **last task** in the sequence:
 result = crew.kickoff(inputs={"topic": "AI"})
 
 # Last task's output
-result.raw                  # str - always available
+result.raw                  # str — always available
 result.pydantic             # Pydantic model (if last task has output_pydantic, else None)
 result.json_dict            # dict (if last task has output_json, else None)
 result["title"]             # reads from pydantic / json_dict
@@ -174,14 +174,14 @@ result.token_usage          # UsageMetrics
 ### Keep Models Simple
 
 ```python
-# Good - flat, clear fields
+# Good — flat, clear fields
 class Report(BaseModel):
     title: str
     summary: str
     key_findings: list[str]
     confidence: float
 
-# Bad - too nested, LLM struggles
+# Bad — too nested, LLM struggles
 class Report(BaseModel):
     metadata: Metadata
     sections: list[Section]
@@ -220,7 +220,7 @@ class Analysis(BaseModel):
 |---|---|
 | `expected_output="BlogPost"` (class name) | Use a descriptive string: `"A blog post with title, content, and tags"` |
 | Accessing `result.title` on CrewOutput | Use `result.pydantic.title` (or `result["title"]`) - output is wrapped |
-| Deeply nested Pydantic models | Flatten the model - LLMs struggle with deep nesting |
+| Deeply nested Pydantic models | Flatten the model — LLMs struggle with deep nesting |
 | Mixing `output_pydantic` and `output_json` on same task | Pick one - setting both raises `Only one output type can be set` |
 | `llm.call(..., response_format=Model)` | Use `response_model=Model`; without either, `LLM.call()` returns a plain string |
 | `Task(response_format=Model)` | Silently ignored - use `output_pydantic=Model` |

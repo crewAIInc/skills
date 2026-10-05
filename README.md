@@ -115,10 +115,10 @@ In [Claude Code](https://docs.claude.com/en/docs/claude-code), add this marketpl
 
 The first command registers the marketplace from this repo's `.claude-plugin/marketplace.json`. The second installs the `crewai-skills` plugin from the `crewai-plugins` marketplace.
 
-To pin to a specific branch or tag:
+To pin to a specific branch or tag, append `#<ref>`:
 
 ```
-/plugin marketplace add crewAIInc/skills
+/plugin marketplace add crewAIInc/skills#<branch-or-tag>
 ```
 
 ## Skill Structure

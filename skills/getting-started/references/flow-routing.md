@@ -15,7 +15,7 @@ from pydantic import BaseModel
 
 ---
 
-## 1. Basic Router - Conditional Branching
+## 1. Basic Router — Conditional Branching
 
 `@router` returns a string label. `@listen("label")` binds to that branch.
 
@@ -48,16 +48,16 @@ class QualityFlow(Flow[QAState]):
 ```
 
 **Key rules:**
-- `@router` must return a **string** - this string is the route label
+- `@router` must return a **string** — this string is the route label
 - `@listen("label")` must match the exact string returned by the router
 - A router can return any number of different labels
-- Only the matching `@listen` fires - others are skipped
+- Only the matching `@listen` fires — others are skipped
 - A label must not equal the name of the method that listens for it (`@listen("publish") def publish` raises at instantiation), and should not equal any method name at all - a router returning a method's name re-triggers that branch
 - A label with no listener ends the flow silently
 
 ---
 
-## 2. or_() - Fire on ANY Upstream Completion
+## 2. or_() — Fire on ANY Upstream Completion
 
 ```python
 class ParallelFetchFlow(Flow):
@@ -83,7 +83,7 @@ class ParallelFetchFlow(Flow):
 
 ---
 
-## 3. and_() - Fire When ALL Upstreams Complete
+## 3. and_() — Fire When ALL Upstreams Complete
 
 ```python
 class MergeFlow(Flow):
@@ -174,7 +174,7 @@ class RevisionFlow(Flow[DocState]):
 ```python
 class ConditionalStartFlow(Flow):
 
-    @start()  # Unconditional - always runs
+    @start()  # Unconditional — always runs
     def init(self):
         self.state["ready"] = True
 
@@ -310,9 +310,9 @@ class ApprovalFlow(Flow[ReviewState]):
 Live run with a scripted reviewer and `anthropic/claude-haiku-4-5` as the `llm`: "Too vague - add a concrete example" mapped to `needs_revision`, the draft was revised, "Perfect, approved, ship it." mapped to `approved`; `human_feedback_history` outcomes were `['needs_revision', 'approved']`.
 
 **Parameters:**
-- `message` - displayed to the human reviewer
-- `emit` - list of possible outcome labels (used with `@listen("label")`)
-- `llm` - interprets free-text feedback into one of the `emit` labels
+- `message` — displayed to the human reviewer
+- `emit` — list of possible outcome labels (used with `@listen("label")`)
+- `llm` — interprets free-text feedback into one of the `emit` labels
 - `default_outcome` - used if no feedback is provided (requires `emit`)
 - `provider` - an object with `request_feedback(context, flow) -> str`; the default reads the console, so pass one for tests, UIs and deployed flows
 - `learn` - if `True`, distills feedback into lessons stored in the flow's `memory` and uses them to pre-review later outputs. Flow memory uses the default OpenAI embedder unless you configure another; failures are logged, not raised

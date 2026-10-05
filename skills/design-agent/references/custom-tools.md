@@ -59,9 +59,9 @@ class DatabaseSearchTool(BaseTool):
 ```
 
 **Key points:**
-- `name` - shown to the agent in tool selection
-- `description` - critical for agent to know WHEN to use the tool
-- `args_schema` - Pydantic model defining inputs (enables validation and descriptions)
+- `name` — shown to the agent in tool selection
+- `description` — critical for agent to know WHEN to use the tool
+- `args_schema` — Pydantic model defining inputs (enables validation and descriptions)
 - `_run()` - the actual tool logic; parameter names must match the schema fields. It is required: a subclass without `_run` cannot be instantiated
 
 Import `BaseTool` and `tool` from `crewai.tools`, not `crewai_tools` (that raises `ImportError`).
@@ -137,9 +137,9 @@ Verified live: an agent holding a weather tool, given a task with only a populat
 
 ## Best Practices
 
-1. **Write clear descriptions** - the agent uses the description to decide when to use the tool
-2. **Use Pydantic schemas** for complex inputs - gives agents parameter descriptions and validation
-3. **Return strings** - tool output is fed back into the LLM as text
+1. **Write clear descriptions** — the agent uses the description to decide when to use the tool
+2. **Use Pydantic schemas** for complex inputs — gives agents parameter descriptions and validation
+3. **Return strings** — tool output is fed back into the LLM as text
 4. **Make failures visible** - a raised exception is fed back to the agent and the crew still "succeeds". When downstream code must know, return `ToolFailure(...)` and set `tool_failure_policy="raise"` (see **connect-tools-and-mcp**)
-5. **Keep tools focused** - one tool per action, not one tool that does everything
-6. **Limit tools per agent** - 3-5 tools max; too many tools confuses the agent
+5. **Keep tools focused** — one tool per action, not one tool that does everything
+6. **Limit tools per agent** — 3-5 tools max; too many tools confuses the agent

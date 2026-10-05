@@ -91,6 +91,6 @@ The installed crewai 1.15.22 source behind each row in the skill. Line numbers a
 | `run --inputs` only for declarative flows and crews | `crewai_cli/run_crew.py:674` |
 | `reset-memories -s/-l/-e` are hidden aliases for `-m` | `crewai_cli/cli.py:427-445, 480` |
 | `create flow` writes `.env` with a placeholder key | `crewai_cli/create_flow.py:56` |
-| `CREWAI_DMN` non-interactive mode: default JSON crew on create, plain run without the run view (1.15.23; present in 1.15.22 too; not in the docs beyond a copy-paste setup prompt) | `crewai_cli/utils.py:79`; `crewai_cli/create_json_crew.py:760, 1304`; `crewai_cli/run_crew.py:334` |
+| `CREWAI_DMN` non-interactive mode: default JSON crew on create, plain run without the run view (1.15.23; present in 1.15.22 too) - unsupported and undocumented; may change | `crewai_cli/utils.py:79`; `crewai_cli/create_json_crew.py:760, 1304`; `crewai_cli/run_crew.py:334` |
 | JSON crew run view exits 1 on failure; classic `crewai run` swallows the subprocess error (1.15.23) | `crewai_cli/run_crew.py:359`, `:822` |
 | Scaffolds pin only `crewai[tools]`, no provider extra (1.15.23) | `crewai_cli/create_json_crew.py:1349`; classic `templates/crew/pyproject.toml` |

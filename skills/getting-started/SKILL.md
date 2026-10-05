@@ -13,7 +13,7 @@ Run `crewai version` first; if the major/minor differs from 1.15, re-check versi
 
 ---
 
-## MANDATORY WORKFLOW - Read This First
+## MANDATORY WORKFLOW — Read This First
 
 **NEVER manually create crewAI project files.** Always scaffold with the CLI:
 
@@ -21,7 +21,7 @@ Run `crewai version` first; if the major/minor differs from 1.15, re-check versi
 crewai create flow <project_name>
 ```
 
-This is **not optional**. Even if you only need one crew, even if you know the file structure by heart - run the CLI first, then modify the generated files. Do NOT write `main.py`, `crew.py`, `agents.yaml`, `tasks.yaml`, or `pyproject.toml` by hand from scratch.
+This is **not optional**. Even if you only need one crew, even if you know the file structure by heart — run the CLI first, then modify the generated files. Do NOT write `main.py`, `crew.py`, `agents.yaml`, `tasks.yaml`, or `pyproject.toml` by hand from scratch.
 
 > **Why:** The CLI sets up correct imports, directory structure, pyproject.toml config, and boilerplate that is easy to get subtly wrong when done manually. The reference material below teaches you how the pieces work so you can *modify* scaffolded code, not so you can *replace* the scaffolding step.
 
@@ -67,7 +67,7 @@ For chat applications, start with a conversational `Flow` rather than trying to 
 
 ---
 
-## 2. LLM.call() - Direct LLM Invocation
+## 2. LLM.call() — Direct LLM Invocation
 
 Use for simple, single-turn tasks where you don't need tools or agent reasoning.
 
@@ -91,17 +91,17 @@ result = llm.call(
     messages=[{"role": "user", "content": f"Extract fields from this email: {email_text}"}],
     response_model=EmailFields,
 )
-print(result.sender)   # str - access Pydantic fields directly
+print(result.sender)   # str — access Pydantic fields directly
 print(result.urgency)  # str
 ```
 
 > `llm.call(..., response_format=Model)` raises `TypeError: ... unexpected keyword argument 'response_format'. Did you mean 'response_model'?`. On `LLM.call()` the keyword is `response_model`; on `Agent.kickoff()` it is `response_format` (next section).
 
-**When NOT to use:** If you need tools, multi-step reasoning, or retries - use an Agent instead.
+**When NOT to use:** If you need tools, multi-step reasoning, or retries — use an Agent instead.
 
 ---
 
-## 3. Agent.kickoff() - Single Agent Execution
+## 3. Agent.kickoff() — Single Agent Execution
 
 Use when you need one agent with tools and reasoning, but don't need multi-agent coordination.
 
@@ -137,13 +137,13 @@ print(result.pydantic.main_points)
 
 > **Note:** `Agent.kickoff()` wraps results in a `LiteAgentOutput` - access structured output via `result.pydantic`. This differs from `LLM.call()`, which returns the Pydantic object directly.
 
-**When NOT to use:** If you need multiple agents passing context to each other - use a Crew.
+**When NOT to use:** If you need multiple agents passing context to each other — use a Crew.
 
 ---
 
 ## 4. CLI Scaffold Reference
 
-As stated above: **NEVER skip `crewai create flow`.** This section documents what the CLI generates so you know what to modify - not so you can recreate it by hand.
+As stated above: **NEVER skip `crewai create flow`.** This section documents what the CLI generates so you know what to modify — not so you can recreate it by hand.
 
 ```bash
 crewai create flow my_project
@@ -242,7 +242,7 @@ class ResearchCrew:
 
 Flows are the recommended way to build production crewAI applications. They provide state management, conditional routing, human-in-the-loop, and persistence - wrapping crews, agents, and LLM calls into a coherent workflow. This section covers how the abstractions fit together; for the full Flow API (state rules, `or_`/`and_`, `@persist`, checkpoints, `@human_feedback`, `plot()`) use the **build-flow** skill.
 
-### Basic Flow - main.py
+### Basic Flow — main.py
 
 ```python
 from crewai.flow import Flow, listen, start
@@ -277,7 +277,7 @@ if __name__ == "__main__":
 **Key points:**
 - `flow.kickoff(inputs={"topic": "AI Agents"})` populates `self.state.topic` (keys must match Pydantic field names; unknown keys are silently dropped). The YAML `{variable}` substitution happens later, when you call `crew.kickoff(inputs={"topic": self.state.topic})` inside a Flow step. The chain is: **flow inputs → state → crew inputs → YAML substitution**.
 - Each `@listen` method runs after its dependency completes
-- State persists across all Flow steps - use it to pass data between crews
+- State persists across all Flow steps — use it to pass data between crews
 
 **State:** use structured state (`Flow[MyState]` with a Pydantic model, every field defaulted) for type safety and validation; `class MyFlow(Flow)` gives dict state (`self.state["topic"]`) for throwaway prototypes. Do not declare `id` yourself - the Flow adds it.
 
@@ -429,7 +429,7 @@ Model and keys come from the environment or `.env`: set `MODEL=anthropic/claude-
 | Crew runs but Flow state is empty | Not writing results back to `self.state` | Assign crew output to `self.state.field` in the `@listen` method |
 | `Process.SEQUENTIAL` raises `AttributeError` | Uppercase enum | Use lowercase: `Process.sequential` |
 | Agent ignores tools | Tools assigned to agent but task needs them | Move tools to task level or verify agent has the right tools |
-| Agent fabricates search results | No tools assigned - agent can't actually search | Add `tools=[SerperDevTool()]` or equivalent; an agent with no tools will hallucinate data |
+| Agent fabricates search results | No tools assigned — agent can't actually search | Add `tools=[SerperDevTool()]` or equivalent; an agent with no tools will hallucinate data |
 | `@listen` never fires | Listener string doesn't match router return value, or a typo in `@listen("method_name")` | `@router` must return the exact string `@listen("label")` expects; for method chaining prefer `@listen(method_ref)` |
 | A listener ran once though two upstreams finished | That is `or_` - it fires once, on the first to complete | Use `and_()` if you need all upstream steps to complete first |
 | `crewai run` says the flow errored but output looks right | `kickoff()` in `main.py` returned a value | Return `None` |
@@ -452,7 +452,7 @@ For deeper dives into specific topics, see:
 - [Crew YAML Configuration](references/crew-yaml-config.md) - full `agents.yaml`, `tasks.yaml` and `@CrewBase` `crew.py` examples
 - [Flow Routing, Persistence, Streaming & Human Feedback](references/flow-routing.md) - `@router`, `or_()`, `and_()`, `@persist`, streaming, and `@human_feedback` patterns
 - [Conversational Flows](references/conversational-flows.md) - multi-turn Flow API with `handle_turn()`, `stream_turn()`, `chat()`, `ConversationConfig`, router behavior, persistence, and tracing
-- [MCP Servers](references/mcp-servers.md) - prefer official MCP servers over native tools; setup, DSL integration, and known official servers
+- [MCP Servers](references/mcp-servers.md) — prefer official MCP servers over native tools; setup, DSL integration, and known official servers
 - [Tools Catalog](references/tools-catalog.md) - common built-in tools with imports, env vars, and common combos (use as fallback when no MCP server exists)
 
 For related skills:
@@ -460,8 +460,8 @@ For related skills:
 - **build-flow** - full Flow API: state rules, routers, `or_`/`and_`, `@persist`, checkpoints, `@human_feedback`, `plot()`
 - **check-crewai-api** - current Agent/Task/Crew/LLM API vs remembered 0.x forms
 - **connect-tools-and-mcp** - custom tools, which `crewai_tools` names exist, `mcps=[...]` forms and timeouts
-- **design-agent** - agent Role-Goal-Backstory framework, parameter tuning, tool assignment, memory & knowledge configuration
-- **design-task** - task description/expected_output best practices, guardrails, structured output, dependencies
+- **design-agent** — agent Role-Goal-Backstory framework, parameter tuning, tool assignment, memory & knowledge configuration
+- **design-task** — task description/expected_output best practices, guardrails, structured output, dependencies
 - **test-crewai-project** - running crews and flows offline with a stub LLM
 - **deploy-to-amp** - project shape and entry points a CrewAI AMP deployment expects
 - **call-deployed-crew** - calling a deployed crew or flow over HTTP

@@ -18,7 +18,7 @@ Sources:
 | Auth header | `Authorization: Bearer <token>` on every call | API introduction |
 | Where the token is | The deployment's detail page, Status tab | API introduction, platform guide |
 | Token types | **Bearer Token** (organization-level, full crew operations) and **User Bearer Token** (user-scoped, limited permissions) | API introduction |
-| Health check | The guide shows `GET /` returning `Healthy`. Live: `404 {"detail":"Not Found"}` on a crew and a flow. Use `GET /inputs` | platform guide; live |
+| Health check | The guide shows `GET /` returning `Healthy`. Observed: `404 {"detail":"Not Found"}` on a crew and a flow. Use `GET /inputs` | platform guide; observed |
 | Bad / missing token | Live: `401 {"detail":"Invalid or missing authentication credentials"}` / `401 {"detail":"Not authenticated"}` | live |
 
 ---
@@ -53,7 +53,7 @@ Response `200`: `{"kickoff_id": "<uuid>"}`.
 
 Errors as documented, and as returned live:
 
-| Case | Documented | Live (2026-10-01) |
+| Case | Reference | Observed |
 |---|---|---|
 | Crew, required key missing / `{"inputs": {}}` / `{}` / bare body without `inputs` | `400` or `422 {"error": "Validation Error", "message": "Missing required inputs", "details": {"missing_inputs": [...]}}` | `422 {"detail":"Missing inputs: audience, topic"}` |
 | Flow, empty or bare body | same | `200`, run on default state; top-level keys ignored |
@@ -71,7 +71,7 @@ Live (`@persist` flow, no LLM): a run's `state.id` equals its `kickoff_id`. `res
 
 Two documented shapes. Live deployments returned the platform guide shape; a client should still accept both.
 
-Live observations (crew and flow, 2026-10-01):
+Observed behaviour (crew and flow):
 - States seen: `PENDING`, `STARTED`, `RUNNING`, `SUCCESS`, `FAILED`, and `NOT FOUND` (with a space). `PAUSED` / `REVOKED` were not seen.
 - An unknown or malformed id returns HTTP `200` with `{"state": "NOT FOUND", "status": "Task not found or Invalid kickoff id", ...}` - not `404`.
 - `status` is a message: `"Task is pending"`, `"Task is Running"`, the exception text on `FAILED` (`"ValueError: ..."`), `null` on `SUCCESS`.
@@ -145,17 +145,7 @@ Response `200`: `{"status": "resumed" | "retrying" | "completed", "message": "..
 
 The [HITL Workflows guide](https://docs-platform.crewai.com/platform/en/guides/human-in-the-loop) adds a kickoff field, `humanInputWebhookUrl`, called when the task waits for review.
 
-Live test on 2026-10-01 (crew with a static `human_input=True` task):
-
-| Step | Observed |
-|---|---|
-| Kickoff with `humanInputWebhookUrl` | Webhook body `{"kickoff_id", "execution_id", "task_id", "task_output", "meta"}`; `task_id` is a UUID, not the method name |
-| `/status` while waiting | `NOT FOUND`, never `PAUSED` |
-| `/resume` with the documented snake_case fields | `422`: `executionId` and `taskId` "Field required" |
-| `/resume` with `executionId`, `taskId` (and either snake or camel feedback fields) | `200 {"kickoff_id": "<new id>"}` - also for an unknown execution |
-| That new kickoff id | `FAILED`, `'NoneType' object is not subscriptable` |
-
-No variant tried resumed the crew to completion. Prove the full cycle on your own deployment before depending on it.
+Before building on crew `human_input=True` over the API, verify the whole cycle on your own deployment: pass `humanInputWebhookUrl` (it is the only signal that a run is waiting; its body carries `execution_id` and a UUID `task_id`), handle `NOT FOUND` as well as `PAUSED` from `/status` while waiting, check which field casing (`executionId`/`taskId` or snake_case) your deployment accepts, and confirm the resumed run reaches `SUCCESS`.
 
 For flows, human review uses `@human_feedback`; see https://docs.crewai.com/en/learn/human-feedback-in-flows.
 

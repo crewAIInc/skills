@@ -23,7 +23,7 @@ Both need an **embedder**, and both default to OpenAI embeddings. Memory also ne
 
 The old `ShortTermMemory`, `LongTermMemory` and `EntityMemory` classes and `memory_config` are gone (`memory_config` is silently ignored). There is one `Memory` class.
 
-### Basic - Enable Default Memory
+### Basic — Enable Default Memory
 
 ```python
 from crewai import Crew

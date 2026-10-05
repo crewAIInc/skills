@@ -17,23 +17,23 @@ Run `crewai version` first; if the major/minor differs, re-check the version-sen
 
 Every deployment has its own base URL (`https://<your-deployment>.crewai.com`) and bearer token, both shown on the deployment's page in the AMP dashboard (Status tab). `crewai deploy status` prints neither. All calls send `Authorization: Bearer <token>`.
 
-| Call | Body | Success response (live, 2026-10-01) | Docs |
+| Call | Body | Success response (live) | Docs |
 |---|---|---|---|
 | `GET /inputs` | - | `{"inputs": ["audience", "topic"]}` | [GET /inputs](https://docs.crewai.com/en/api-reference/inputs) |
 | `POST /kickoff` | `{"inputs": {"topic": "...", ...}}` plus optional siblings (section 4) | `{"kickoff_id": "<uuid>"}` | [POST /kickoff](https://docs.crewai.com/en/api-reference/kickoff) |
 | `GET /status/{kickoff_id}` | - | run state, progress, result (section 5) | [GET /status](https://docs.crewai.com/en/api-reference/status) |
-| `POST /resume` | see section 5 - the live field names differ from the docs | `{"kickoff_id": "<new uuid>"}` | [POST /resume](https://docs.crewai.com/en/api-reference/resume) |
+| `POST /resume` | see section 5 - verify the body on your deployment | `{"kickoff_id": "<new uuid>"}` | [POST /resume](https://docs.crewai.com/en/api-reference/resume) |
 
-The [Kickoff Crew guide](https://docs-platform.crewai.com/platform/en/guides/kickoff-crew) shows `GET /` answering `Healthy`; live deployments (a crew and a flow) answered `404 {"detail":"Not Found"}`. Use `GET /inputs` as the readiness check.
+Use `GET /inputs` as the readiness check; `GET /` may return `404`.
 
-What live deployments returned for errors (the docs list `400` / `401` / `404` / `422` / `500` with different bodies - [API introduction](https://docs.crewai.com/en/api-reference/introduction)):
+Responses to expect (handle the documented codes too - [API introduction](https://docs.crewai.com/en/api-reference/introduction)):
 
 | Request | Live response |
 |---|---|
 | Wrong token | `401 {"detail":"Invalid or missing authentication credentials"}` |
 | No `Authorization` header | `401 {"detail":"Not authenticated"}` |
 | Crew kickoff with a required key missing, `{"inputs": {}}`, `{}` or a bare body | `422 {"detail":"Missing inputs: audience, topic"}` - a plain string, not `details.missing_inputs` |
-| Body that is not valid JSON | `500 Internal Server Error` (plain text, not `400`) |
+| Body that is not valid JSON | `500 Internal Server Error` |
 | `GET /status/<unknown id>` | `200` with `"state": "NOT FOUND"` - not `404` |
 
 ```bash
@@ -141,7 +141,7 @@ Live deployments return the [Kickoff Crew guide](https://docs-platform.crewai.co
 
 | Source | State field | Values | Result |
 |---|---|---|---|
-| Live (crew and flow, 2026-10-01) | `state`; `status` is a message (`"Task is Running"`, the exception text on `FAILED`, `null` on `SUCCESS`) | seen: `PENDING`, `STARTED`, `RUNNING`, `SUCCESS`, `FAILED`, `NOT FOUND` | `result` string (`null` until done), `result_json` (`null` for plain text) |
+| Live (crew and flow) | `state`; `status` is a message (`"Task is Running"`, the exception text on `FAILED`, `null` on `SUCCESS`) | seen: `PENDING`, `STARTED`, `RUNNING`, `SUCCESS`, `FAILED`, `NOT FOUND` | `result` string (`null` until done), `result_json` (`null` for plain text) |
 | Kickoff Crew guide | same | also lists `PAUSED`, `REVOKED` | same |
 | API reference | `status` | `running`, `completed`, `error` | `result.output`, error text in `error` |
 
@@ -159,14 +159,9 @@ Prefer webhooks (section 4) over tight polling when many runs are in flight.
 
 ### Human input and `POST /resume` - verify before relying on it
 
-A crew task with `human_input=True` pauses after that task. In a live test on 2026-10-01:
+Before building on crew `human_input=True` over the API, verify the whole cycle on your own deployment: pass `humanInputWebhookUrl` (it is the only signal that a run is waiting; its body carries `execution_id` and a UUID `task_id`), handle `NOT FOUND` as well as `PAUSED` from `/status` while waiting, check which field casing (`executionId`/`taskId` or snake_case) your deployment accepts, and confirm the resumed run reaches `SUCCESS`.
 
-- With `humanInputWebhookUrl` in the kickoff body, the receiver got `{"kickoff_id", "execution_id", "task_id", "task_output", "meta"}`. `task_id` is a UUID, not the task's method name. Without that field nothing told the caller the run was waiting.
-- While waiting, `/status` reported `NOT FOUND`, never `PAUSED`.
-- `POST /resume` with the documented snake_case body (`execution_id`, `task_id`, `human_feedback`, `is_approve`) was rejected: `422`, `executionId` and `taskId` "Field required".
-- With `executionId` / `taskId` it answered `200 {"kickoff_id": "<new id>"}` (an unknown execution got the same answer), and the new run ended `FAILED` with `'NoneType' object is not subscriptable`. No variant tried completed the crew.
-
-Before building on crew HITL over the API, run one paused-and-resumed execution end to end on your own deployment. For new work, consider a Flow with `@human_feedback` ([Human Feedback in Flows](https://docs.crewai.com/en/learn/human-feedback-in-flows)). The docs say webhook URLs are not carried over to `/resume`; send them again.
+For new work, consider a Flow with `@human_feedback` ([Human Feedback in Flows](https://docs.crewai.com/en/learn/human-feedback-in-flows)). The docs say webhook URLs are not carried over to `/resume`; send them again.
 
 ---
 
@@ -246,7 +241,7 @@ Shared external limits still apply across concurrent runs: enforce per-minute AP
 | First call times out, the next one works | Client timeout too short for a slow first response | Long first-call timeout, retries with `Retry-After`, start with `GET /inputs` |
 | A run's prompt shows another run's customer or topic | Per-run data written into task text, tool instances, or globals | Section 8 |
 | Webhook events arrive out of order | HTTP delivery is not ordered | Sort by `timestamp` or `data.emission_sequence` |
-| `/resume` returns `422` "executionId ... Field required" | The live endpoint wants camelCase ids, unlike the docs | See section 5 and test the whole pause/resume cycle first |
+| `/resume` returns `422` "executionId ... Field required" | Field casing differs from the reference page | See section 5 and test the whole pause/resume cycle first |
 
 ---
 

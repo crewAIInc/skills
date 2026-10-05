@@ -310,13 +310,13 @@ Reset stored data from the project directory with `crewai reset-memories -m` (me
 
 | You probably wrote | Current form | What the wrong form does |
 |---|---|---|
-| `crewai create crew my_crew` expecting `crew.py` + YAML | `crewai create crew my_crew --classic` | Starts an interactive wizard that writes a JSON project (`crew.jsonc`, `agents/*.jsonc`); with no TTY it prints `Aborted!`. Scripts that only need a crew should use `--classic --skip-provider`. For a JSON crew without prompts, `CREWAI_DMN=1 crewai create crew my_crew --provider anthropic/claude-haiku-4-5` wrote a one-agent, one-task JSON crew with `"memory": true` (`CREWAI_DMN` observed in crewai 1.15.x, undocumented) |
-| `crewai run` on a JSON crew in CI or a script | `CREWAI_DMN=1 crewai run --inputs '{"topic": "bees"}'` (`CREWAI_DMN` observed in crewai 1.15.x, undocumented) | Opens a full-screen run view that waits for the user to quit, even with no TTY, so the command never exits |
+| `crewai create crew my_crew` expecting `crew.py` + YAML | `crewai create crew my_crew --classic` | Starts an interactive wizard that writes a JSON project (`crew.jsonc`, `agents/*.jsonc`); with no TTY it prints `Aborted!`. Scripts that only need a crew should use `--classic --skip-provider`. |
+| `crewai run` on a JSON crew in CI or a script | For CI, create the crew with `crewai create crew <name> --classic` and run it with `uv run run_crew` | Opens a full-screen run view that waits for the user to quit, even with no TTY, so the command never exits. An environment variable, `CREWAI_DMN=1`, skipped the run view on crewai 1.15.x, but it is unsupported and undocumented; may change |
 | Leaving `"memory": true` from the JSON scaffold with no `OPENAI_API_KEY` | Set the key, set `"memory": false`, or configure an embedder | The crew completes; memory recall and saves fail silently |
 | `crewai run --inputs '{...}'` on a classic crew | Put inputs in `main.py` `run()` | `Error: --inputs is only supported for declarative flows and crews` |
 | `crewai reset-memories -s -l -e` | `crewai reset-memories -m` | Deprecated aliases, warning printed |
 | `return crew.kickoff(...)` from `main.run()` | Do not return the output | The `run_crew` script calls `sys.exit(<CrewOutput>)` and exits 1 after a successful run; `crewai run` prints `An error occurred while running the crew: ... non-zero exit status 1` |
-| Trusting `crewai run`'s exit code in CI on a classic crew (`--classic`) or a Python flow | Run `uv run run_crew` (exit code propagates) or check the output | There `crewai run` exits 0 even when the crew or flow process failed; JSON (wizard) crews exit 1 on failure (with `CREWAI_DMN=1`), and have no `run_crew` script |
+| Trusting `crewai run`'s exit code in CI on a classic crew (`--classic`) or a Python flow | Run `uv run run_crew` (exit code propagates) or check the output | There `crewai run` exits 0 even when the crew or flow process failed; JSON (wizard) crews have no `run_crew` script, so create CI crews with `--classic` |
 
 ```bash
 crewai version
@@ -357,8 +357,8 @@ The classic layout: `src/<name>/crew.py` (`@CrewBase` class), `src/<name>/config
 | Knowledge never appears in prompts | Crew-level knowledge failed to embed | Set `embedder=`; look for `Failed to upsert documents` |
 | `TypeError: ... unexpected keyword argument 'from_task'` | Custom `BaseLLM.call` with the old signature | Accept `from_task`, `from_agent`, `response_model`, `**kwargs` |
 | `Tuple[bool, Any]` ValidationError at `Task(...)` | Guardrail annotated `-> bool` or `tuple[bool, object]` | Annotate `-> tuple[bool, Any]` and return a tuple |
-| `crewai create crew` hangs or prints `Aborted!` | It is an interactive JSON wizard now | Add `--classic` for the `@CrewBase` layout, or `CREWAI_DMN=1` for a default JSON crew |
-| `crewai run` never returns on a JSON crew | The run view waits for a keypress | `CREWAI_DMN=1 crewai run` |
+| `crewai create crew` hangs or prints `Aborted!` | It is an interactive JSON wizard now | Add `--classic` for the `@CrewBase` layout; use it for CI and scripts |
+| `crewai run` never returns on a JSON crew | The run view waits for a keypress | For CI, use `crewai create crew <name> --classic` plus `uv run run_crew` |
 | `kickoff_for_each` results all answer the first topic | The `Crew` was already kicked off | Build a fresh `Crew` per batch |
 | `token_usage` larger than the run could have used | An `LLM` object shared by several agents or reused across crews | One `LLM` per agent per crew, or count `LLMCallCompletedEvent`s |
 | Agent never uses its MCP tools under `akickoff()` | `https://` string in `mcps` inside a running event loop | `MCPServerHTTP(url=...)` |
@@ -379,7 +379,7 @@ The classic layout: `src/<name>/crew.py` (`@CrewBase` class), `src/<name>/config
 - [ ] Memory and knowledge have an explicit embedder or a provider key in the environment
 - [ ] No `CodeInterpreterTool`, `allow_code_execution`, `ShortTermMemory`, `memory_config`
 - [ ] Classic projects created with `crewai create crew <name> --classic`; provider extra added with `uv add`
-- [ ] CI runs JSON crews with `CREWAI_DMN=1` and classic crews with `uv run run_crew`
+- [ ] CI and scripts use classic crews (`crewai create crew <name> --classic`) run with `uv run run_crew`
 
 ---
 
