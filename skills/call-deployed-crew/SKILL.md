@@ -138,7 +138,7 @@ Do not assume the first request answers as fast as the rest, or that it answers 
 
 - Give the first request a generous timeout (minutes, not seconds) and retry `502` / `503` / `504` with backoff, honoring `Retry-After`.
 - Make that first request `GET /inputs`: it is read-only, so retrying it is always safe, and you need its key list anyway.
-- Retry `POST /kickoff` only when the request provably never reached the server (connection refused / DNS) or got a `502` / `503` / `504`. A read timeout may mean the run started.
+- Retry `POST /kickoff` only when the request provably never reached the server (connection refused / DNS) or got a `503`. A read timeout, `502` or `504` may mean the run started: look for it before sending another kickoff.
 
 ---
 
@@ -193,7 +193,7 @@ Shared external limits still apply across concurrent runs: enforce per-minute AP
 | `401` | Wrong token, or a token from another deployment | Copy the token from this deployment's Status tab |
 | Poll loop never ends | Waiting for one exact string (`"completed"`) while the API returns `SUCCESS`, or no deadline | Lower-case, accept both vocabularies, add a deadline |
 | Result is empty / `None` | Reading `result` before the state is terminal, or ignoring `result_json` | Read the result only after a success state; check `result_json` first |
-| Duplicate runs | `POST /kickoff` retried after a read timeout | Retry only connection failures and `502`/`503`/`504` |
+| Duplicate runs | `POST /kickoff` retried after a read timeout, `502` or `504` | Retry `POST /kickoff` only on connection failures and `503` |
 | First call times out, the next one works | Client timeout too short for a slow first response | Long first-call timeout, retries with `Retry-After`, start with `GET /inputs` |
 | A run's prompt shows another run's customer or topic | Per-run data written into task text, tool instances, or globals | Section 8 |
 | Webhook events arrive out of order | HTTP delivery is not ordered | Sort by `timestamp` |
@@ -212,7 +212,7 @@ Shared external limits still apply across concurrent runs: enforce per-minute AP
 - [ ] First request has a long timeout and retries `502`/`503`/`504` honoring `Retry-After`
 - [ ] No runtime writes to task or agent text; per-run data flows through inputs
 - [ ] Tools and module globals hold no per-run state
-- [ ] Memory-heavy automations run in their own deployment
+- [ ] Large inputs are streamed or chunked, and peak memory was measured locally before deploying
 
 ---
 

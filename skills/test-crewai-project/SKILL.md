@@ -63,12 +63,17 @@ import socket
 from pathlib import Path
 
 # Optional, test-only switches. The AGENTS.md that `crewai create` writes leaves
-# turning observability off to the user, so ask before adding these three lines;
-# the network guard below already keeps tests offline.
-# If used, set them before crewai is imported; never in the project's .env.
-os.environ["CREWAI_DISABLE_TELEMETRY"] = "true"
-os.environ["CREWAI_TRACING_ENABLED"] = "false"
-os.environ["OTEL_SDK_DISABLED"] = "true"
+# turning observability off to the user, so ask before uncommenting them.
+# Without them the socket guard below does not cover everything:
+# - crewai telemetry is still sent to telemetry.crewai.com when the test process
+#   exits, after the guard has been undone;
+# - if the test job sets CREWAI_TRACING_ENABLED=true and a CrewAI token (for example
+#   CREWAI_USER_PAT) is present, kickoff requests a trace upload, the guard refuses
+#   it, and the test fails with TraceGrantError.
+# If uncommented, they must run before crewai is imported; never put them in the project's .env.
+# os.environ["CREWAI_DISABLE_TELEMETRY"] = "true"
+# os.environ["CREWAI_TRACING_ENABLED"] = "false"
+# os.environ["OTEL_SDK_DISABLED"] = "true"
 # Absolute path: crewai's SQLite files and memory store go here instead of your user data dir.
 os.environ["CREWAI_STORAGE_DIR"] = str(Path(__file__).parent / ".crewai-test-storage")
 
@@ -403,7 +408,7 @@ Rules:
 ## Checklist
 
 - [ ] `tests/stub_llm.py` copied from `references/stub_llm.py`; pytest added as a dev dependency
-- [ ] `conftest.py` sets an absolute `CREWAI_STORAGE_DIR` before importing crewai and blocks the network; the observability switches are present only if the user chose them
+- [ ] `conftest.py` sets an absolute `CREWAI_STORAGE_DIR` before importing crewai and blocks the network; the observability switches are uncommented only if the user chose them
 - [ ] Every agent's LLM is injectable (factory parameter, swap after `.crew()`, or patched crew class)
 - [ ] Each structured task gets valid JSON from the stub, and tests assert `out.pydantic is not None`
 - [ ] At least one test asserts on prompt text (inputs, context, tool listing)

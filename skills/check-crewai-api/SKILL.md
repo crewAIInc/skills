@@ -299,7 +299,7 @@ Reset stored data from the project directory with `crewai reset-memories -m` (me
 | `crewai run --inputs '{...}'` on a classic crew | Put inputs in `main.py` `run()` | `Error: --inputs is only supported for declarative flows and crews` |
 | `crewai reset-memories -s -l -e` | `crewai reset-memories -m` | Deprecated aliases, warning printed |
 | `return crew.kickoff(...)` from `main.run()` | Do not return the output | The `run_crew` script calls `sys.exit(<CrewOutput>)` and exits 1 after a successful run; `crewai run` prints `An error occurred while running the crew: ... non-zero exit status 1` |
-| Trusting `crewai run`'s exit code in CI | Run `uv run run_crew` (exit code propagates) or check the output | `crewai run` exits 0 even when the crew process failed |
+| Trusting `crewai run`'s exit code in CI on a classic crew (`--classic`) or a Python flow | Run `uv run run_crew` (exit code propagates) or check the output | There `crewai run` exits 0 even when the crew or flow process failed; JSON (wizard) crews exit non-zero, and have no `run_crew` script |
 
 ```bash
 crewai version

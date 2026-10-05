@@ -22,7 +22,7 @@ Run `crewai version --tools` to see the installed crewai-tools version. Every na
 
 ## 2. All exported names (1.15.22-1.15.23)
 
-`crewai_tools` has 118 public names: 113 classes plus the submodules `adapters`, `aws`, `rag`, `security`, `tools`.
+`crewai_tools` has 118 public names: 111 classes, the factory functions `CrewaiPlatformTools` and `ZapierActionTools`, and the submodules `adapters`, `aws`, `rag`, `security`, `tools`.
 
 | Area | Names |
 |---|---|

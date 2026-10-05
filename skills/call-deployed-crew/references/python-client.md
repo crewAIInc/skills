@@ -10,7 +10,7 @@ What it does, and why:
 | Wraps values in `{"inputs": {...}}` and sends non-strings as JSON strings | the bare-body `400` / `422`; type surprises (the API documents input values as strings) |
 | Long timeout on the first request, then the normal timeout | failing on a slow first response |
 | Retries `502` / `503` / `504` honoring `Retry-After`, and connection errors | giving up on a transient gateway error |
-| Never retries `POST /kickoff` after a read timeout | duplicate runs |
+| Never retries `POST /kickoff` after a read timeout, `502` or `504` | duplicate runs |
 | Reads `state`, then `status`, lower-cased; accepts both documented vocabularies | poll loops that never see `"completed"` |
 | Reads `result_json`, then `result` / `result.output` | empty results |
 | Backoff with jitter under an overall deadline | unbounded polling |
@@ -98,7 +98,11 @@ class DeployedCrew:
                     raise
                 time.sleep(min(2 ** attempt, 30))
                 continue
-            if resp.status_code in RETRYABLE_STATUS and attempt < self.retries:
+            # POST /kickoff (retry_on_timeout=False): after a 502 or 504 the run may have
+            # started, so only a 503 is resent.
+            if resp.status_code in RETRYABLE_STATUS and attempt < self.retries and (
+                retry_on_timeout or resp.status_code == 503
+            ):
                 retry_after = resp.headers.get("Retry-After", "")
                 delay = float(retry_after) if retry_after.isdigit() else min(2 ** attempt, 30)
                 time.sleep(delay)

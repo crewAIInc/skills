@@ -102,7 +102,7 @@ Filters see the **sanitized** tool name. A server tool called `getForecast` must
 | `MCPServerStdio(command="uvx", args=["mcp-server-time"])`, tool `get_current_time` | `uvx_mcp-server-time_get_current_time` | `uvx_mcp_server_time_get_current_time` |
 | `MCPServerStdio(command="python", args=["servers/inventory.py"])`, tool `lookup_stock` | `python_servers/inventory.py_lookup_stock` | `python_servers_inventory_py_lookup_stock` |
 | `MCPServerStdio` with absolute interpreter and script paths | longer than 64 chars | first 55 chars + `_` + 8-char hash, e.g. `opt_app_venv_bin_python_opt_app_servers_inventory_serve_a87662e9` - the tool name is no longer visible |
-| `MCPServerHTTP` / `MCPServerSSE` / `https://` string at `https://api.example.com:8443/v1/mcp`, tool `getForecast` | `api_example_com:8443_v1_mcp_getForecast` | `api_example_com_8443_v1_mcp_get_forecast` |
+| `MCPServerHTTP` / `MCPServerSSE` / `https://` string at `https://api.example.com:8443/v1/mcp`, tool `getForecast` | `api_example_com:8443_v1_mcp_get_forecast` | `api_example_com_8443_v1_mcp_get_forecast` |
 | AMP slug | derived from the URL your account returns | ends in `_<tool>`; the prefix is not the slug |
 | `MCPServerAdapter` | the server's tool name | sanitized bare name, e.g. `lookup_stock` |
 

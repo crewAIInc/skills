@@ -161,4 +161,4 @@ Source: https://docs-platform.crewai.com/platform/en/features/webhook-streaming
 | `404` | unknown kickoff id / resource | check the deployment URL; brief grace right after kickoff, then fail |
 | `422` | missing required inputs (`details.missing_inputs`) | add the keys; do not retry |
 | `500` | server error | surface it; for read-only calls a delayed retry is safe |
-| `502` / `503` / `504` | not in the API reference; standard gateway / unavailable codes | treat as transient: retry with backoff, honoring `Retry-After` |
+| `502` / `503` / `504` | not in the API reference; standard gateway / unavailable codes | treat as transient: retry read-only calls with backoff, honoring `Retry-After`; retry `POST /kickoff` only on `503`, since after a `502` / `504` the run may have started |
