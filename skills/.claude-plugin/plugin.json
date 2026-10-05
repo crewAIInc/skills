@@ -1,11 +1,17 @@
 {
   "name": "crewai-skills",
-  "version": "1.0.0",
-  "description": "CrewAI development skills for Claude Code covering agent design, task configuration, structured output, and debugging common pitfalls",
+  "version": "1.1.0",
+  "description": "CrewAI development skills for Claude Code covering agent design, task configuration, structured output, Flows, tools and MCP, offline testing, deploying to CrewAI AMP, and calling deployed crews, verified against the current crewai release",
   "skills": [
     "./ask-docs",
+    "./build-flow",
+    "./call-deployed-crew",
+    "./check-crewai-api",
+    "./connect-tools-and-mcp",
+    "./deploy-to-amp",
     "./design-agent",
     "./design-task",
-    "./getting-started"
+    "./getting-started",
+    "./test-crewai-project"
   ]
 }
