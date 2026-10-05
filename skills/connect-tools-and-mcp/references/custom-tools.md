@@ -121,7 +121,7 @@ class InventoryApiTool(BaseTool):
     description: str = "Query the inventory API for a SKU."
 
     def _run(self, sku: str) -> ToolFailure | str:
-        status = 429                                  # pretend the API rate-limited us
+        status = 429                                  # pretend the API rate-limited this call
         if status != 200:
             return ToolFailure(message=f"inventory API returned {status}",
                                code="rate_limited", retryable=True)

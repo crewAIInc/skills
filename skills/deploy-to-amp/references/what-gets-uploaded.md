@@ -108,4 +108,4 @@ Practices:
 | ZIP upload | Upload a ZIP of the project root (not its parent folder). Exclude `.git`, `.venv`, `.env` and caches yourself. |
 | Monorepo | Set a working directory (relative to the repo or ZIP root) in the dashboard. The CLI create flow has no option for it, and auto-deploy is disabled while a working directory is set. |
 
-Docs: [Automations](https://docs.crewai.com/en/enterprise/features/automations), [Monorepo Deployments](https://docs.crewai.com/en/enterprise/guides/monorepo-deployments), [Deploy to AMP](https://docs.crewai.com/en/enterprise/guides/deploy-to-amp).
+Docs: [Automations](https://docs-platform.crewai.com/platform/en/features/automations), [Monorepo Deployments](https://docs-platform.crewai.com/platform/en/guides/monorepo-deployments), [Deploy to AMP](https://docs-platform.crewai.com/platform/en/guides/deploy-to-amp).

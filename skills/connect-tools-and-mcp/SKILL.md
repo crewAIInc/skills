@@ -11,8 +11,6 @@ Verified against crewai 1.15.22 and 1.15.23 on 2026-10-01.
 Live-tested on CrewAI AMP and real LLMs on 2026-10-01.
 Run `crewai version` first; if the major/minor differs from 1.15, re-verify version-sensitive rows with the `ask-docs` skill before trusting them.
 
-Where the getting-started, design-agent or design-task skills in this plugin disagree with this skill, follow this skill - it was re-checked against crewai 1.15.22 and 1.15.23. The installed crewai source outranks both.
-
 ---
 
 ## 1. Pick the mechanism
@@ -194,7 +192,7 @@ Native MCP tools are offered to the LLM as `<server name>_<tool name>`, then san
 
 Consequences:
 - Do not write "call the `lookup_stock` tool" in a task description or backstory. Describe the capability ("check stock levels with the inventory tool"), or derive the exact name at runtime. A native function-calling model usually copes (claude-haiku-4-5 told "call the lookup_stock tool" called `python_mcp_server_py_lookup_stock`), but a model on the text ReAct path fails with `Action 'lookup_stock' don't exist`, and a hashed name leaves only the description to go on.
-- Keep stdio `command`/`args` short (`"uvx"`, `"npx"`, a relative script path) so names stay readable and under 64 characters. Absolute paths also put your filesystem layout into every prompt.
+- Keep stdio `command`/`args` short (`"uvx"`, `"npx"`, a relative script path) so names stay readable and under 64 characters. Absolute paths also put your filesystem layout into every prompt. A scoped npx package already uses about 45 characters: `npx -y @modelcontextprotocol/server-filesystem ./data` hashed `list_allowed_directories` to `..._data_list_4ab656ee`; use `MCPServerAdapter` when bare names matter.
 - In code, identify a resolved native MCP tool by `tool.original_tool_name`, not by `tool.name`.
 
 ---

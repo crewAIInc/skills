@@ -11,8 +11,6 @@ Verified against crewai 1.15.22 and 1.15.23 on 2026-10-01.
 Live-tested on CrewAI AMP and real LLMs on 2026-10-01.
 Run `crewai version` first; if the major/minor differs, re-verify the version-sensitive rows below with the `ask-docs` skill before trusting them.
 
-Where the getting-started, design-agent or design-task skills in this plugin disagree with this skill, follow this skill - it was re-checked against crewai 1.15.22 and 1.15.23. The installed crewai source outranks both.
-
 ---
 
 ## 1. Preflight - run these three every time
@@ -232,7 +230,7 @@ The CLI keeps one selected org per OS user in `~/.config/crewai/settings.json`, 
 
 - [What gets uploaded](references/what-gets-uploaded.md) - per-path matrix, ZIP include/exclude rules, env-var handling, and a script to list what a ZIP deploy would contain
 - [Validate checks](references/validate-checks.md) - every `crewai deploy validate` check, its code and severity, and what it cannot catch
-- Public docs: [Prepare for Deployment](https://docs.crewai.com/en/enterprise/guides/prepare-for-deployment), [Deploy to AMP](https://docs.crewai.com/en/enterprise/guides/deploy-to-amp), [Automations](https://docs.crewai.com/en/enterprise/features/automations), [Monorepo Deployments](https://docs.crewai.com/en/enterprise/guides/monorepo-deployments), [CLI](https://docs.crewai.com/en/concepts/cli)
+- Public docs: [Prepare for Deployment](https://docs-platform.crewai.com/platform/en/guides/prepare-for-deployment), [Deploy to AMP](https://docs-platform.crewai.com/platform/en/guides/deploy-to-amp), [Automations](https://docs-platform.crewai.com/platform/en/features/automations), [Monorepo Deployments](https://docs-platform.crewai.com/platform/en/guides/monorepo-deployments), [CLI](https://docs.crewai.com/en/concepts/cli)
 
 For related skills:
 

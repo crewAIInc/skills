@@ -38,6 +38,8 @@ The installed crewai 1.15.22 source behind each row in the skill. Line numbers a
 | `kickoff_async` wraps sync `kickoff` in `asyncio.to_thread`; `akickoff` is native | `crewai/crew.py:1135, 1168, 1187, 1215` |
 | `kickoff_for_each` | `crewai/crew.py:1099` |
 | `kickoff_for_each` copies the crew per input; a copied task keeps the already-interpolated description (1.15.23) | `crewai/crew.py:1121`; `crewai/task.py:1154` |
+| `token_usage` sums `agent.llm.get_token_usage_summary()` per agent, so a shared or reused `LLM` object is counted more than once (1.15.23) | `crewai/crew.py:2273-2293` (`calculate_usage_metrics`) |
+| `https://` MCP string refs resolve with `asyncio.run()` (no tools inside a running event loop) (1.15.23) | `crewai/mcp/tool_resolver.py:552` (`_get_mcp_tool_schemas`) |
 | `CrewOutput` fields | `crewai/crews/crew_output.py:17-27` |
 | `out["key"]` reads pydantic then json_dict | `crewai/crews/crew_output.py:77` |
 
@@ -53,6 +55,7 @@ The installed crewai 1.15.22 source behind each row in the skill. Line numbers a
 | Provider `call` takes `response_model`, not `response_format` | `crewai/llms/providers/openai/completion.py:581` |
 | `BaseLLM.call` is the one abstract method and receives `from_task`, `from_agent`, `response_model` | `crewai/llms/base_llm.py:323-324` |
 | `Agent.kickoff(messages, response_format=...)` | `crewai/agent/core.py:1676` |
+| crewai marks messages with a `cache_breakpoint` key (1.15.23) | `crewai/llms/cache.py:27` (`mark_cache_breakpoint`); `crewai/agents/crew_agent_executor.py:195` |
 
 ## Structured output and guardrails
 
@@ -74,6 +77,7 @@ The installed crewai 1.15.22 source behind each row in the skill. Line numbers a
 | Default memory embedder is OpenAI `text-embedding-3-large`; default analysis LLM `gpt-5.4-mini` | `crewai/memory/unified_memory.py:52, 89, 295` |
 | `remember()` without an embedder raises `RuntimeError` | `crewai/memory/unified_memory.py:293` |
 | Agent knowledge failure raises at kickoff | `crewai/agent/core.py:492` |
+| Agent knowledge is queried only on the task path (`execute_task` / `aexecute_task`), never by `Agent.kickoff()` (1.15.23) | `crewai/agent/core.py:979-986, 1121-1123` (`handle_knowledge_retrieval` calls); `kickoff` at `:1774` has none |
 | Crew knowledge failure only logs | `crewai/crew.py:720`; `crewai/knowledge/storage/knowledge_storage.py:135` |
 | Custom knowledge embedder type checks | `crewai/rag/embeddings/providers/custom/custom_provider.py:15`; `crewai/rag/embeddings/providers/custom/types.py:12` |
 | `ollama` embedder needs the `ollama` Python package (1.15.23) | `chromadb/utils/embedding_functions/ollama_embedding_function.py:34` |
@@ -87,6 +91,6 @@ The installed crewai 1.15.22 source behind each row in the skill. Line numbers a
 | `run --inputs` only for declarative flows and crews | `crewai_cli/run_crew.py:674` |
 | `reset-memories -s/-l/-e` are hidden aliases for `-m` | `crewai_cli/cli.py:427-445, 480` |
 | `create flow` writes `.env` with a placeholder key | `crewai_cli/create_flow.py:56` |
-| `CREWAI_DMN` non-interactive mode: default JSON crew on create, plain run without the run view (1.15.23) | `crewai_cli/utils.py:79`; `crewai_cli/create_json_crew.py:760, 1304`; `crewai_cli/run_crew.py:334` |
+| `CREWAI_DMN` non-interactive mode: default JSON crew on create, plain run without the run view (1.15.23; present in 1.15.22 too; not in the docs beyond a copy-paste setup prompt) | `crewai_cli/utils.py:79`; `crewai_cli/create_json_crew.py:760, 1304`; `crewai_cli/run_crew.py:334` |
 | JSON crew run view exits 1 on failure; classic `crewai run` swallows the subprocess error (1.15.23) | `crewai_cli/run_crew.py:359`, `:822` |
 | Scaffolds pin only `crewai[tools]`, no provider extra (1.15.23) | `crewai_cli/create_json_crew.py:1349`; classic `templates/crew/pyproject.toml` |

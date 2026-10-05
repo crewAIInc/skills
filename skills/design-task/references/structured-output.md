@@ -2,7 +2,7 @@
 
 How to get structured, typed output from LLM calls, agents, tasks, and crews.
 
-Verified against crewai 1.15.23 on 2026-10-01, live with a real LLM. The parameter name differs by level - `response_model` on `LLM.call()`, `response_format` on `Agent.kickoff()` and the `LLM(...)` constructor, `output_pydantic` / `output_json` on `Task` - and a wrong name on `Task` is silently ignored.
+Verified against crewai 1.15.22 and 1.15.23 on 2026-10-01, live with a real LLM. The parameter name differs by level - `response_model` on `LLM.call()`, `response_format` on `Agent.kickoff()` and the `LLM(...)` constructor, `output_pydantic` / `output_json` on `Task` - and a wrong name on `Task` is silently ignored.
 
 ---
 

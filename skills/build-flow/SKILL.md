@@ -11,8 +11,6 @@ Verified against crewai 1.15.22 and 1.15.23 on 2026-10-01.
 Live-tested on CrewAI AMP and real LLMs on 2026-10-01.
 Run `crewai version` first; if the major/minor differs from 1.15, re-verify version-sensitive rows with the `ask-docs` skill before trusting them.
 
-Where the getting-started, design-agent or design-task skills in this plugin disagree with this skill, follow this skill - it was re-checked against crewai 1.15.22 and 1.15.23. The installed crewai source outranks both.
-
 ---
 
 ## 1. Scaffold and run a flow project
@@ -101,7 +99,7 @@ State rules (each one prevents a real failure):
 | Pass `inputs` of the right type | `inputs={"topic": 5}`: `ValueError: Invalid inputs for structured state` |
 | Never set `self.state.id` by hand | It is the persistence key; use `restore_from_state_id` (section 6) |
 
-On a deployed flow (tested on CrewAI AMP, 2026-10-01), `GET /inputs` lists the state model's fields (every field except `id`), and the `inputs` object of `POST /kickoff` is applied to state exactly like `kickoff(inputs=...)`. A body without the `inputs` wrapper (`{"text": "..."}`) was still accepted (`200` and a `kickoff_id`) and the run succeeded on default state - the value never reached the flow. The run's `state.id` equalled its `kickoff_id`. Calling patterns: the **call-deployed-crew** skill.
+On a deployed flow (tested on CrewAI AMP, 2026-10-01), `GET /inputs` lists the state model's declared fields (the generated `id` is not listed; a model that declares `id` itself gets it listed too), and the `inputs` object of `POST /kickoff` is applied to state exactly like `kickoff(inputs=...)`. A body without the `inputs` wrapper (`{"text": "..."}`) was still accepted (`200` and a `kickoff_id`) and the run succeeded on default state - the value never reached the flow. The run's `state.id` equalled its `kickoff_id`. Calling patterns: the **call-deployed-crew** skill.
 
 ---
 
@@ -182,7 +180,8 @@ print(calls)   # e.g. [('or', 'A'), ('and', 'B')] - the start methods run concur
 ```
 
 - **`or_` fires once per kickoff**, on the first condition to complete. It does not run again when the second one completes, so you do not need a "seen" flag.
-- `or_` re-arms when a router emits one of its labels again. That is what makes a revision loop work (`@listen(or_(write_draft, "needs_revision"))` runs on the first draft and after each revision; see [routing-patterns](references/routing-patterns.md)).
+- `or_` re-arms when a router emits one of its labels again. That is what makes a revision loop work (`@listen(or_(write_draft, "needs_revision"))` runs on the first draft and again on every `needs_revision`; see [routing-patterns](references/routing-patterns.md)).
+- Do not let a separate revise step listen to the same label as the review step: two `@listen("needs_revision")` methods run in parallel on that label, so the review re-checks the unrevised draft (verified on 1.15.22 and 1.15.23: three reviews all saw `v1`). Make the revise step a router that returns a new label (`@router("needs_revision") def revise(...): ...; return "revised"`) and have the review listen to `or_(write_draft, "revised")`.
 - **`and_` fires once, after all conditions complete**, and receives the output of the last one to finish. Read the others from `self.state`.
 - A typical join after a router: `@listen(or_(page_oncall, file_ticket))` runs exactly once, whichever branch ran.
 
@@ -217,6 +216,7 @@ class ResearchFlow(Flow):
 | `def` | `crew.kickoff(inputs=...)`, `agent.kickoff(...)` | - |
 | `async def` | `await crew.akickoff(inputs=...)` | `crew.kickoff()` inside `async def`: `RuntimeError: Agent execution was invoked synchronously from within a running event loop` |
 
+- Under `await crew.akickoff()`, an agent's `mcps=["https://..."]` string refs resolve to **zero tools with no error** (they need to start their own event loop). Use `MCPServerHTTP(url=...)` from `crewai.mcp` in async methods; details in the **connect-tools-and-mcp** skill.
 - Crew `{placeholders}` are filled from the crew's own `kickoff(inputs=...)`, not from flow state. A crew kicked off with no inputs sends the literal `{topic}` to the LLM. Pass the state values you need explicitly.
 - Build the crew inside the method (or call `MyCrew().crew()` from a `@CrewBase` class each time), so each run gets fresh objects.
 - Flow methods are plain methods: `ReportFlow().plan()` can be called directly in a unit test.

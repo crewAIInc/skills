@@ -125,7 +125,7 @@ Knowledge gives agents access to domain-specific documents via RAG.
 from crewai.knowledge.source.string_knowledge_source import StringKnowledgeSource
 
 source = StringKnowledgeSource(
-    content="Our company policy states that all deployments must be approved by two reviewers..."
+    content="Company policy states that all deployments must be approved by two reviewers..."
 )
 ```
 
@@ -316,7 +316,7 @@ Memory, knowledge and the other local stores live under one storage directory:
 |---|---|
 | unset | `<platform data dir>/<project directory name>/` - on macOS `~/Library/Application Support/<project>/`, on Linux `~/.local/share/<project>/` |
 | absolute path | that path |
-| relative name, e.g. `./my_project_storage` | still under the platform data dir: `~/Library/Application Support/my_project_storage` on macOS |
+| relative name, e.g. `./my_project_storage` | split: knowledge and the SQLite files go under the platform data dir (`~/Library/Application Support/my_project_storage` on macOS), but memory goes to `./my_project_storage/memory` relative to the current directory |
 
 ```bash
 export CREWAI_STORAGE_DIR="$PWD/.crewai_storage"   # use an absolute path

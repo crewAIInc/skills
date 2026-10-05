@@ -230,8 +230,9 @@ class DeployedCrew:
     def run(self, inputs: dict[str, Any], *, flow: bool = False, **wait_kw: Any) -> Any:
         """Validate against /inputs, kick off, wait, return the result.
 
-        flow=True: a flow's /inputs lists every state field (including "id") and none
-        is required, and its values must keep their JSON types - so skip both.
+        flow=True: a flow's /inputs lists every declared state field ("id" too, if
+        declared), none is required, and its values must keep their JSON types - so
+        skip both.
         """
         required = self.get_inputs()  # also absorbs a slow first response, safely
         kickoff_id = self.kickoff(
@@ -336,6 +337,6 @@ done
 
 Exit codes: `0` success (result on stdout), `1` run failed, `2` missing inputs, `3` paused for human feedback, `4` deadline passed (the run may still be going), `5` the id stayed `NOT FOUND` or `/status` kept returning a non-JSON error; anything else is a curl error for an HTTP error status - `22`, or `56` with curl 8.x over HTTP/2 (a wrong token gave `56` live).
 
-For a flow, run it with `FLOW=1`: a flow's `/inputs` lists every state field (none required), and its inputs are validated against the typed state - live, `"history": "[]"` made the run `FAILED` (`Input should be a valid list`) while `"history": ["a"]` worked. Never send `id` (an empty one is rejected with `422 "'inputs.id' must be a valid UUID when provided"`).
+For a flow, run it with `FLOW=1`: a flow's `/inputs` lists every declared state field (none required), and its inputs are validated against the typed state - live, `"history": "[]"` made the run `FAILED` (`Input should be a valid list`) while `"history": ["a"]` worked. Never send `id` (an empty one is rejected with `422 "'inputs.id' must be a valid UUID when provided"`).
 
 `curl --retry` retries timeouts and `408` / `429` / `500` / `502` / `503` / `504` and honors `Retry-After`; it is used only on the read-only calls. The kickoff call has no `--retry`.

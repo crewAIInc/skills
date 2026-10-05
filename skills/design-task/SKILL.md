@@ -7,7 +7,7 @@ description: "CrewAI task design and configuration. Use when creating, configuri
 
 How to write effective tasks that produce reliable, high-quality output from your agents.
 
-Verified against crewai 1.15.23 on 2026-10-01.
+Verified against crewai 1.15.22 and 1.15.23 on 2026-10-01.
 Live-tested with real LLMs on 2026-10-01.
 For exact current API forms (imports, parameter names, structured output, guardrail signatures) the **check-crewai-api** skill is the reference; where this skill and it disagree, follow check-crewai-api.
 
@@ -218,12 +218,12 @@ def validate_word_count(output: TaskOutput) -> tuple[bool, Any]:
         return (False, f"Output too short ({word_count} words). Expand to at least 500 words.")
     if word_count > 2000:
         return (False, f"Output too long ({word_count} words). Condense to under 2000 words.")
-    return (True, output)
+    return (True, output.raw)
 
 Task(..., guardrail=validate_word_count, guardrail_max_retries=3)  # max retries (default: 3)
 ```
 
-**Return format:** `(bool, Any)` - first element is pass/fail, second is the result on success (the `TaskOutput`, or a string that replaces `output.raw`; never `None`) or the error message on failure. Annotate the return as `tuple[bool, Any]` or leave it unannotated: `-> bool` raises `If return type is annotated, it must be Tuple[bool, Any]` at `Task(...)`. Use `guardrail_max_retries`, not the deprecated `max_retries`.
+**Return format:** `(bool, Any)` - first element is pass/fail, second is the result on success (a string that becomes the task's raw output - usually `output.raw`; never `None`) or the error message on failure. Return the string, not the `TaskOutput` itself: when the task has `output_pydantic` and its agent has tools, `output.pydantic` is still `None` inside the guardrail, and `(True, output)` keeps it that way, so `result.pydantic` ends up `None`; `(True, output.raw)` lets crewai convert it (verified on 1.15.22 and 1.15.23). Annotate the return as `tuple[bool, Any]` or leave it unannotated: `-> bool` raises `If return type is annotated, it must be Tuple[bool, Any]` at `Task(...)`. Use `guardrail_max_retries`, not the deprecated `max_retries`.
 
 ### LLM-Based Guardrails
 
@@ -239,7 +239,7 @@ A string guardrail is checked by an extra LLM call made with the task agent's LL
 def validate_no_pii(output: TaskOutput) -> tuple[bool, Any]:
     if "@" in output.raw:
         return (False, "Remove email addresses.")
-    return (True, output)
+    return (True, output.raw)
 
 Task(..., guardrails=[
     validate_word_count,           # Function: check length
@@ -381,10 +381,7 @@ Task(description="Search for and scrape the top 5 articles about {topic}...", ex
 
 If `tools` is set on the task, the agent gets **only** those tools for that task - the lists are not merged. Leave it unset to use the agent's tools.
 
-**When to use task-level tools:**
-- The task needs tools the agent doesn't normally have
-- You want to restrict an agent to specific tools for this task
-- Different tasks by the same agent need different tool sets
+Use task-level tools when the task needs tools the agent does not normally have, to restrict the agent for one task, or when the same agent needs different tool sets for different tasks.
 
 ---
 
@@ -424,6 +421,7 @@ Variables are replaced at kickoff: `crew.kickoff(inputs={"topic": "AI Agents", "
 | `human_input=True` in CI or a server | `EOFError` after wasted retries | Pipe answers into stdin, or use Flow `@human_feedback` |
 | Missing tools for data tasks | Agent fabricates data instead of fetching it | Add tools to the task or agent |
 | No guardrails on critical output | Bad output flows downstream unchecked | Add function or LLM guardrails |
+| Guardrail returns `(True, output)` on a structured task | `result.pydantic` is `None` though the run passed | Return `(True, output.raw)`; assert `.pydantic` is not None |
 | Overly strict expected_output or guardrail | Agent retries until `Task failed guardrail validation` | Be specific but achievable; lower `guardrail_max_retries` to fail faster |
 | Description duplicates backstory | Wasted tokens and confused agent | Description = what to do; backstory = who you are |
 
@@ -459,4 +457,6 @@ For related skills:
 - **getting-started** - project scaffolding, choosing the right abstraction, Flow architecture
 - **design-agent** - agent Role-Goal-Backstory framework, parameter tuning, tool assignment, memory & knowledge configuration
 - **build-flow** - Flow state, routers and `@human_feedback`
+- **test-crewai-project** - testing guardrails and task wiring offline with a stub LLM
+- **connect-tools-and-mcp** - the tools you attach to tasks, and which `crewai_tools` names exist
 - **ask-docs** - query the live CrewAI docs for questions not covered by these skills

@@ -8,7 +8,7 @@ description: "CrewAI architecture decisions and project scaffolding. Use when st
 How to choose the right abstraction, scaffold a project, and wire everything together.
 
 Verified against crewai 1.15.23 on 2026-10-01.
-Live-tested with real LLMs (`anthropic/claude-haiku-4-5`) on 2026-10-01.
+Live-tested with real LLMs on 2026-10-01.
 Run `crewai version` first; if the major/minor differs from 1.15, re-check version-sensitive details with the `ask-docs` skill.
 
 ---
@@ -464,4 +464,5 @@ For related skills:
 - **design-task** - task description/expected_output best practices, guardrails, structured output, dependencies
 - **test-crewai-project** - running crews and flows offline with a stub LLM
 - **deploy-to-amp** - project shape and entry points a CrewAI AMP deployment expects
+- **call-deployed-crew** - calling a deployed crew or flow over HTTP
 - **ask-docs** - query the live CrewAI docs for questions not covered by these skills

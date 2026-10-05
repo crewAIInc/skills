@@ -8,7 +8,7 @@ description: "CrewAI agent design and configuration. Use when creating, configur
 How to design effective agents with the right role, goal, backstory, tools, and configuration.
 
 Verified against crewai 1.15.23 on 2026-10-01.
-Live-tested with real LLMs (anthropic/claude-haiku-4-5) on 2026-10-01.
+Live-tested with real LLMs on 2026-10-01.
 
 Exact API forms (imports, defaults, provider extras, structured output) are in the **check-crewai-api** skill, and tools and MCP are in **connect-tools-and-mcp**. Where this skill and those disagree, follow them.
 
@@ -429,4 +429,5 @@ For related skills:
 - **build-flow** - Flow state, routing, persistence, conversational flows
 - **getting-started** - project scaffolding, choosing the right abstraction
 - **design-task** - task description/expected_output best practices, guardrails, structured output, dependencies
+- **test-crewai-project** - testing agents and crews offline with a stub LLM
 - **ask-docs** - query the live CrewAI docs for questions not covered by these skills

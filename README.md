@@ -6,7 +6,7 @@ A collection of skills for AI coding agents that teach best practices for buildi
 
 ### getting-started
 
-CrewAI architecture decisions and project scaffolding. Covers choosing the right abstraction (`LLM.call()` vs `Agent.kickoff()` vs `Crew.kickoff()` vs `Flow`), CLI scaffolding, YAML configuration, wiring `@CrewBase` crews, writing Flows with `@start`/`@listen`, conversational Flows with `handle_turn()`, and variable interpolation.
+CrewAI architecture decisions and project scaffolding. Covers choosing the right abstraction (`LLM.call()` vs `Agent.kickoff()` vs `Crew.kickoff()` vs `Flow`), CLI scaffolding, YAML configuration, wiring `@CrewBase` crews, writing Flows with `@start`/`@listen`, conversational Flows with `handle_turn()`, variable interpolation, and starting points for MCP servers and built-in tools.
 
 **Use when:**
 - Starting a new CrewAI project
@@ -19,7 +19,7 @@ CrewAI architecture decisions and project scaffolding. Covers choosing the right
 
 ### design-agent
 
-CrewAI agent design and configuration. Covers the Role-Goal-Backstory framework, LLM selection, tool assignment, execution tuning (`max_iter`, `max_rpm`, `max_execution_time`), memory and knowledge sources, guardrails, and YAML vs code configuration.
+CrewAI agent design and configuration. Covers how many agents to use, the Role-Goal-Backstory framework, LLM selection, tool assignment, execution limits (`max_iter`, `max_rpm`, `max_execution_time`) and what each really does, planning, memory and knowledge sources with embedders that work without OpenAI, agent guardrails, and YAML vs code configuration.
 
 **Use when:**
 - Creating or configuring CrewAI agents
@@ -41,9 +41,18 @@ CrewAI task design and configuration. Covers writing effective descriptions and 
 - Adding guardrails or human review
 - Debugging task execution issues
 
+### ask-docs
+
+Answers CrewAI questions from the official documentation, matched to the crewai version the user runs. Covers the two docs sites (the open-source framework and the CrewAI AMP platform), their `llms.txt` indexes, Markdown pages and docs MCP servers, how to read the docs for a specific release, and checking a docs snippet against the installed package before trusting it.
+
+**Use when:**
+- A CrewAI question is not covered by the other skills
+- Another skill asks to re-verify a row for a different crewai version
+- Setting up the CrewAI docs MCP server in a coding agent
+
 ### check-crewai-api
 
-The current crewai 1.15.x API versus the 0.x API that coding assistants tend to remember. A "you probably wrote X, the current form is Y" table covering imports, Agent/Task/Crew parameters and defaults, kickoff variants, LLM model strings and provider extras, structured output, guardrails, unified Memory, knowledge embedders, the `crewai create crew` wizard, and removed features. Every row was run against the installed release.
+The current crewai 1.15.x API versus the 0.x API that coding assistants tend to remember. A "you probably wrote X, the current form is Y" table covering imports, Agent/Task/Crew parameters and defaults, kickoff variants, LLM model strings and provider extras, structured output, guardrails, unified Memory, knowledge embedders, the `crewai create crew` wizard, and removed features. Each row was checked against crewai 1.15.22 and 1.15.23, with a source reference for re-checking after an upgrade.
 
 **Use when:**
 - Writing, reviewing, or debugging any crewai code
@@ -92,7 +101,7 @@ Calling a deployed crew or flow over HTTP: the token and URL, `GET /inputs`, `PO
 
 **Use when:**
 - Writing a client, backend, or frontend that calls a deployed crew
-- A kickoff returns "Missing required inputs" or a status poll never ends
+- A kickoff returns `422 "Missing inputs: ..."`, or a status poll never ends or says `NOT FOUND`
 - One run's prompt shows another run's data
 
 ## Installation
@@ -116,7 +125,7 @@ To pin to a specific branch or tag:
 
 Each skill contains:
 - `SKILL.md` - Instructions for the agent
-- `references/` - Supporting documentation (tools catalog, MCP servers, structured output patterns, etc.)
+- `references/` - Supporting documentation (crew YAML configuration, tools catalog, MCP servers, structured output patterns, API contracts, etc.)
 
 ## License
 

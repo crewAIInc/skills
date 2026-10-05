@@ -8,7 +8,7 @@ description: "Deterministic, offline testing of CrewAI crews and flows with pyte
 How to test crews and flows deterministically, without API keys, and how to debug real runs with events and traces.
 
 Verified against crewai 1.15.22 and 1.15.23 on 2026-10-01.
-Live-tested on CrewAI AMP and real LLMs on 2026-10-01.
+Live-tested with real LLMs on 2026-10-01.
 Run `crewai version` first; if the major/minor differs, re-verify the version-sensitive rows with the `ask-docs` skill.
 
 ---
@@ -170,7 +170,7 @@ Rules that keep stub tests stable:
 |---|---|
 | Queue valid JSON (a dict) for every `output_pydantic` / `output_json` task | An unparseable answer makes crewai spend extra converter LLM calls, which eat later queue items, and then it raises `ConverterError` |
 | `output_pydantic` is what fills `out.pydantic` | `Task(response_model=X)` alone sends the schema to the LLM but leaves `out.pydantic` as `None` |
-| Count calls with `len(llm.calls)`, not `out.token_usage` | Crew usage is summed per agent, so one stub shared by 2 agents is counted twice |
+| Count calls with `len(llm.calls)`, not `out.token_usage` | Crew usage is summed per agent over each LLM object's lifetime: one stub shared by 2 agents is counted twice, and a stub reused for a second crew carries the first crew's tokens |
 | When the call order is hard to predict, use `responder` and decide on `response_model` or prompt text | A queue only works if you know the exact call order |
 | Build a fresh crew for `kickoff_for_each` | On a crew that was already kicked off, every item silently reuses the previous kickoff's inputs |
 
@@ -214,7 +214,7 @@ def test_research_crew_output_and_prompts():
 
 | Assert | Catches |
 |---|---|
-| An input value appears in the prompt | a missing `inputs` key (the literal `{topic}` stays in the prompt) |
+| An input value appears in the prompt | a kickoff with no `inputs` (the literal `{topic}` stays in the prompt; a dict that misses one key raises `ValueError` instead) |
 | The previous task's output appears in the next prompt | broken `context=` |
 | `Tool Name: <snake_case name>` appears | a tool not attached. `@tool("Word Counter")` renders as `word_counter`; `Action: Word Counter` still resolves |
 | The guardrail error appears in the retry prompt | a guardrail whose feedback never reaches the model |
@@ -411,7 +411,7 @@ Rules:
 | Guardrail rejects valid JSON on the first try | it read `output.pydantic`, which was None | parse `output.raw` |
 | Listener or trace shows no LLM calls | custom LLM does not emit events | emit them inside `llm_call_context()` (the stub does) |
 | Listener counts grow across tests | handlers registered globally | `crewai_event_bus.scoped_handlers()` + `flush()` |
-| `token_usage` is double the call count | one LLM instance shared by several agents | assert on `len(llm.calls)` |
+| `token_usage` is double the call count, or grows from test to test | one LLM instance shared by several agents, or reused across crews | a fresh stub per crew; assert on `len(llm.calls)` |
 | New dirs under the user data dir after tests | `CREWAI_STORAGE_DIR` unset at import time | set it to an absolute path at the top of `conftest.py` |
 | `TraceGrantError: AMP trace grant request failed (RuntimeError)` in pytest | tracing on + a saved `crewai login` or `CREWAI_USER_PAT` + the socket guard | `CREWAI_TRACING_ENABLED=false` in `conftest.py` (tests only) |
 | `crewai test` "passed" in CI but scored nothing | it exits 0 even when the run fails | check its output for the score table |

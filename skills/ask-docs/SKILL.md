@@ -1,6 +1,6 @@
 ---
 name: ask-docs
-description: "Query the official CrewAI documentation for answers. Use when the user has a CrewAI question that isn't fully covered by the getting-started, design-agent, design-task skills — e.g., specific API details, configuration options, advanced features, troubleshooting errors, enterprise features, tool references, or anything where the latest docs are the best source of truth."
+description: "Query the official CrewAI documentation for answers. Use when the user has a CrewAI question that isn't fully covered by the other CrewAI skills in this plugin — e.g., specific API details, configuration options, advanced features, troubleshooting errors, enterprise features, tool references, or anything where the latest docs are the best source of truth."
 ---
 
 # Ask CrewAI Docs
@@ -8,6 +8,7 @@ description: "Query the official CrewAI documentation for answers. Use when the 
 Answer CrewAI questions from the official documentation, matched to the crewai version the user actually runs.
 
 Verified against crewai 1.15.23 and the docs sites below on 2026-10-01.
+Live-tested with real LLMs on 2026-10-01.
 
 There are two documentation sites:
 
@@ -16,7 +17,7 @@ There are two documentation sites:
 | `docs.crewai.com` | The open-source framework: agents, crews, tasks, flows, memory, knowledge, LLMs, tools, CLI, testing, telemetry, observability, and the AMP REST API reference (`/inputs`, `/kickoff`, `/status`, `/resume`) | `https://docs.crewai.com/llms.txt` | `https://docs.crewai.com/mcp` |
 | `docs-platform.crewai.com` | CrewAI AMP (the hosted platform): deploying, automations, triggers, RBAC, secrets, Studio, platform API | `https://docs-platform.crewai.com/llms.txt` | `https://docs-platform.crewai.com/mcp` |
 
-Old `docs.crewai.com/en/enterprise/...` links redirect to the platform introduction page, not to the page you wanted. Look platform topics up on `docs-platform.crewai.com`.
+Old `docs.crewai.com/en/enterprise/...` links redirect to `docs-platform.crewai.com/platform/en/...` - to the matching page when it still exists (as HTML, even from a `.md` URL), otherwise to the platform introduction. Look platform topics up on `docs-platform.crewai.com` directly; its pages also serve Markdown with a `.md` suffix.
 
 ---
 
@@ -86,7 +87,7 @@ Rules learned from live use:
 
 `https://docs.crewai.com/llms-full.txt` is every page in one file (about 2 MB). Do not load it into context. Download it and search it (`curl -s ... | grep -n -A20 "restore_from_state_id"`) when the index does not point to the right page.
 
-For conversational Flows, go straight to `https://docs.crewai.com/en/guides/flows/conversational-flows.md`. Treat it as the source of truth for the experimental `crewai.experimental.conversational` surface, which may change before it graduates.
+For conversational Flows, go straight to `https://docs.crewai.com/en/guides/flows/conversational-flows.md`. Treat it as the source of truth for the conversational API (imported from `crewai.flow`; `crewai.experimental.conversational` is a deprecated alias of the same module), which may still change.
 
 ### Path C: GitHub source of the docs
 
@@ -137,7 +138,7 @@ Other good uses:
 | User question | Why this skill |
 |---|---|
 | "What parameters does `Crew()` accept?" | API reference - check it against the installed signature |
-| "How do I turn off telemetry?" | `/en/telemetry.md`; no sibling skill covers it |
+| "How do I turn off telemetry?" | `/en/telemetry.md` for what is collected; the test-crewai-project skill has the exact switch values, checked against the installed package |
 | "What CLI commands does `crewai` support?" | `/en/concepts/cli.md`, then `crewai --help` on the installed version |
 | "What tools are available for web scraping?" | Tools library pages under `/en/tools/` |
 | "How do I set up RBAC on AMP?" | `docs-platform.crewai.com` (`/platform/en/features/rbac`) |

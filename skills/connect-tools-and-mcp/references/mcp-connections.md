@@ -81,14 +81,14 @@ only_reads = MCPServerStdio(
     command="npx",
     args=["-y", "@modelcontextprotocol/server-filesystem", "./data"],
     tool_filter=create_static_tool_filter(
-        allowed_tool_names=["read_file", "list_directory"],
+        allowed_tool_names=["read_text_file", "list_directory"],   # read_file is deprecated in this server
         blocked_tool_names=["write_file"],          # blocked wins over allowed
     ),
 )
 
 def no_destructive(context, tool):
     """context: ToolFilterContext(agent, server_name, run_context); tool: dict with 'name', 'description', ..."""
-    return not tool["name"].startswith(("delete", "drop"))
+    return not tool["name"].startswith(("write", "edit", "move"))
 
 guarded = MCPServerStdio(command="npx", args=["-y", "@modelcontextprotocol/server-filesystem", "./data"],
                          tool_filter=create_dynamic_tool_filter(no_destructive))

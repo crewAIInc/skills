@@ -162,7 +162,7 @@ Observed: two `akickoff()` calls running at the same time on two `SupportCrew().
 | Call pattern on a single `Crew` object | Observed on 1.15.22-1.15.23 |
 |---|---|
 | Two concurrent `akickoff()` | Second run raises `RuntimeError: Executor is already running. Cannot invoke the same executor instance concurrently.` |
-| Two concurrent `kickoff_async()` (thread-based) | Nondeterministic: sometimes both finished; sometimes the second raised the same `RuntimeError`, and in a few of those the run that finished had used the other run's input in a later task's prompt |
+| Two concurrent `kickoff_async()` (thread-based) | Nondeterministic: sometimes both finished; sometimes the second raised the same `RuntimeError` |
 | A fresh crew per run, concurrently | Both finish; each run's prompts contain only its own inputs |
 
 The agents and tasks hold per-run state (interpolated text, the agent executor), so a `Crew` object is not a reusable, thread-safe service object.

@@ -86,7 +86,7 @@ Consequences:
 - A literal JSON example inside a prompt (`Reply like {"title": "..."}`) is not interpolated, but `fetch_inputs()` reports `"title": "..."` as an input name. Any input list derived from braces will ask for it. Put output structure in `output_pydantic` / `response_model` instead of a JSON sample in the text.
 - Send dates as ISO 8601 strings and structured values as JSON strings, and parse them inside the crew.
 
-**Flows are different.** A deployed flow's `GET /inputs` listed every field of its state model, including `id` (`{"inputs": ["topic", "count", "id", "history"]}`), and none of them is required: a flow kickoff with `{"inputs": {}}` returned `200` and ran on default state. Send only the fields you mean to set, with the JSON types of the state model (a list as a list - `"[]"` as a string made the run `FAILED`), and never send `id` (section 3).
+**Flows are different.** A deployed flow's `GET /inputs` lists the fields its state model declares - `{"inputs": ["topic", "count", "id", "history"]}` for a test model that declared `id` itself; a model that leaves `id` to the Flow does not list it (see the **build-flow** skill) - and none of them is required: a flow kickoff with `{"inputs": {}}` returned `200` and ran on default state. Send only the fields you mean to set, with the JSON types of the state model (a list as a list - `"[]"` as a string made the run `FAILED`), and never send `id` (section 3).
 
 ---
 
@@ -232,7 +232,7 @@ Shared external limits still apply across concurrent runs: enforce per-minute AP
 | Crew: `422 {"detail":"Missing inputs: audience, topic"}` on every call | Body is `{"topic": ...}` without the `inputs` wrapper | Send `{"inputs": {...}}` |
 | Flow ignores the values you sent and runs on defaults | Same bare body - a flow accepts it with `200` | Send `{"inputs": {...}}` |
 | `422` listing one key | A `{placeholder}` in agent or task text has no matching input | Send every key from `GET /inputs`; check for typos and stray braces |
-| Client refuses a flow kickoff: missing `id`, `count`, ... | Flow `/inputs` lists every state field | Do not enforce `/inputs` for flows; never send `id` |
+| Client refuses a flow kickoff: missing `count`, `history`, ... | Flow `/inputs` lists every declared state field, none required | Do not enforce `/inputs` for flows; never send `id` |
 | `500 Internal Server Error` on kickoff | Body is not valid JSON | Build the body with a JSON library or `jq`, not string concatenation |
 | Locally: `Missing required template variable '...' in description` | Same as above, raised by crewai before any LLM call | Same |
 | Output talks about `{topic}` literally | Kicked off with no / empty inputs - interpolation was skipped, no error | Validate inputs client-side; never send `{}` to a crew with placeholders |

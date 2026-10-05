@@ -30,7 +30,7 @@ Source: https://docs.crewai.com/en/api-reference/inputs
 
 Locally, the same names come from the `{placeholder}` tokens in task `description` / `expected_output` and agent `role` / `goal` / `backstory`; `Crew.fetch_inputs()` returns them as a set.
 
-Flows (live): `/inputs` returned every field of the state model, including `id` - `{"inputs": ["topic", "count", "id", "history"]}`. None is required; do not send `id`.
+Flows (live): `/inputs` returned the fields the state model declares - `{"inputs": ["topic", "count", "id", "history"]}` for a model that declared `id`; another flow whose model did not declare `id` listed only its own fields. None is required; do not send `id`.
 
 ---
 
