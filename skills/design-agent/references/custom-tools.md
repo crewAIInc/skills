@@ -1,6 +1,6 @@
 # Custom Tools Reference
 
-How to build your own tools for crewAI agents.
+How to build your own tools for crewAI agents. The **connect-tools-and-mcp** skill has the full, verified reference (failure policy, usage limits, MCP); this page covers the basics for agent design.
 
 ---
 
@@ -18,7 +18,7 @@ def search_database(query: str) -> str:
     return "\n".join(str(r) for r in results)
 ```
 
-The docstring becomes the tool's description — make it clear so the agent knows when to use it.
+The docstring becomes the tool's description - make it clear so the agent knows when to use it. A function without a docstring raises `ValueError: Function must have a docstring`. The name is offered to the LLM sanitized (`"Search Database"` becomes `search_database`).
 
 ### With Multiple Parameters
 
@@ -37,7 +37,6 @@ def filter_records(category: str, min_score: int = 0) -> str:
 Best for tools with configuration, state, or complex input schemas.
 
 ```python
-from typing import Type
 from crewai.tools import BaseTool
 from pydantic import BaseModel, Field
 
@@ -49,7 +48,7 @@ class SearchInput(BaseModel):
 class DatabaseSearchTool(BaseTool):
     name: str = "Search Database"
     description: str = "Search the internal database for relevant records. Use when you need to find specific data."
-    args_schema: Type[BaseModel] = SearchInput
+    args_schema: type[BaseModel] = SearchInput
 
     # Add custom configuration as class attributes
     db_connection: str = ""
@@ -63,15 +62,15 @@ class DatabaseSearchTool(BaseTool):
 - `name` — shown to the agent in tool selection
 - `description` — critical for agent to know WHEN to use the tool
 - `args_schema` — Pydantic model defining inputs (enables validation and descriptions)
-- `_run()` — the actual tool logic; parameter names must match the schema fields
+- `_run()` - the actual tool logic; parameter names must match the schema fields. It is required: a subclass without `_run` cannot be instantiated
+
+Import `BaseTool` and `tool` from `crewai.tools`, not `crewai_tools` (that raises `ImportError`).
 
 ---
 
 ## Async Tools
 
-For I/O-bound operations (API calls, web requests):
-
-### With @tool Decorator
+For I/O-bound operations (API calls, web requests), make the function itself async:
 
 ```python
 import aiohttp
@@ -85,31 +84,13 @@ async def fetch_webpage(url: str) -> str:
             return await response.text()
 ```
 
-### With BaseTool (Both Sync and Async)
-
-```python
-class WebFetcherTool(BaseTool):
-    name: str = "Fetch Webpage"
-    description: str = "Fetch content from a URL"
-    args_schema: Type[BaseModel] = WebFetcherInput
-
-    def _run(self, url: str) -> str:
-        """Sync fallback."""
-        import requests
-        return requests.get(url).text
-
-    async def _arun(self, url: str) -> str:
-        """Async implementation — preferred when available."""
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url) as response:
-                return await response.text()
-```
+For a `BaseTool`, put the async code in `async def _run(...)`. Agents call a tool through `_run` in both `kickoff()` and `akickoff()`. An `_arun` override is only used when you call `tool.arun()` yourself (verified: the agent-side invocation of a tool with both methods ran `_run`).
 
 ---
 
 ## Custom Caching
 
-Control when tool results are cached:
+Tool-result caching is **off by default**: turn it on with `Crew(cache=True)`. Then control per call what may be cached:
 
 ```python
 @tool("Expensive Lookup")
@@ -123,6 +104,8 @@ def should_cache(arguments: dict, result: str) -> bool:
 
 expensive_lookup.cache_function = should_cache
 ```
+
+Never cache live-data or state-changing tools.
 
 ---
 
@@ -139,7 +122,7 @@ agent = Agent(
     tools=[SerperDevTool(), search_database],
 )
 
-# Task-level: available ONLY for this specific task (overrides agent tools)
+# Task-level: REPLACES the agent's tools for this specific task
 task = Task(
     description="Search the database for...",
     expected_output="...",
@@ -148,6 +131,8 @@ task = Task(
 )
 ```
 
+Verified live: an agent holding a weather tool, given a task with only a population tool, could call only the population tool.
+
 ---
 
 ## Best Practices
@@ -155,6 +140,6 @@ task = Task(
 1. **Write clear descriptions** — the agent uses the description to decide when to use the tool
 2. **Use Pydantic schemas** for complex inputs — gives agents parameter descriptions and validation
 3. **Return strings** — tool output is fed back into the LLM as text
-4. **Handle errors gracefully** — return error messages as strings rather than raising exceptions
+4. **Make failures visible** - a raised exception is fed back to the agent and the crew still "succeeds". When downstream code must know, return `ToolFailure(...)` and set `tool_failure_policy="raise"` (see **connect-tools-and-mcp**)
 5. **Keep tools focused** — one tool per action, not one tool that does everything
 6. **Limit tools per agent** — 3-5 tools max; too many tools confuses the agent

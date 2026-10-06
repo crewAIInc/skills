@@ -1,11 +1,16 @@
 ---
 name: design-agent
-description: "CrewAI agent design and configuration. Use when creating, configuring, or debugging crewAI agents — choosing role/goal/backstory, selecting LLMs, assigning tools, tuning max_iter/max_rpm/max_execution_time, enabling planning/code execution/delegation, setting up knowledge sources, using guardrails, or configuring agents in YAML vs code."
+description: "CrewAI agent design and configuration. Use when creating, configuring, or debugging crewAI agents — choosing role/goal/backstory, selecting LLMs, assigning tools, tuning max_iter/max_rpm/max_execution_time, enabling planning/delegation, setting up knowledge sources, using guardrails, or configuring agents in YAML vs code."
 ---
 
 # CrewAI Agent Design Guide
 
 How to design effective agents with the right role, goal, backstory, tools, and configuration.
+
+Verified against crewai 1.15.23 on 2026-10-01.
+Live-tested with real LLMs on 2026-10-01.
+
+Exact API forms (imports, defaults, provider extras, structured output) are in the **check-crewai-api** skill, and tools and MCP are in **connect-tools-and-mcp**. Where this skill and those disagree, follow them.
 
 ---
 
@@ -24,20 +29,17 @@ How to design effective agents with the right role, goal, backstory, tools, and 
 - **Different LLMs** — a cheap model for mechanical steps, a stronger one for synthesis.
 - **Different guardrails or output schemas** — separate agents make the contract per stage explicit.
 
-**DO NOT add an agent just because the workflow has multiple steps.** A single agent can:
-- Call multiple tools in sequence within one kickoff (search → scrape → summarize is one agent's loop).
-- Produce structured multi-section output in one response.
-- Iterate via its own tool-use loop without you orchestrating it as separate agents.
+**DO NOT add an agent just because the workflow has multiple steps.** A single agent can call multiple tools in sequence within one kickoff (search → scrape → summarize is one agent's loop), produce structured multi-section output in one response, and iterate via its own tool-use loop.
 
 **Cost calculus:** every extra agent = at least one more LLM kickoff plus a context handoff. Splitting linear, single-persona work into multiple agents multiplies token cost and adds fragility for marginal quality wins.
 
-### Anti-pattern: Sequential mechanical steps as separate agents
+### Anti-patterns
 
 ❌ Three agents for what is one researcher's job:
 ```python
 source_finder = Agent(role="Finds URLs via Firecrawl search", tools=[firecrawl_search])
 scraper       = Agent(role="Scrapes URLs via Firecrawl scrape", tools=[firecrawl_scrape])
-writer        = Agent(role="Writes the report", ...)
+writer        = Agent(role="Writes the report")  # plus goal, backstory, llm
 ```
 
 ✅ One researcher does the gathering loop; one writer synthesizes — two agents because the personas and LLMs genuinely differ:
@@ -45,57 +47,34 @@ writer        = Agent(role="Writes the report", ...)
 researcher = Agent(role="Web Researcher", tools=[firecrawl_search, firecrawl_scrape], llm="anthropic/claude-haiku-4-5")
 writer     = Agent(role="Technical Report Writer",                                    llm="anthropic/claude-sonnet-4-6")
 ```
-The researcher's task description tells it to search, then scrape, then return structured findings. One LLM loop, multiple tool calls.
 
-### Anti-pattern: "Summarize then send" as two agents
+❌ A `Summarizer` agent plus a `Slack Sender` agent (`apps=["slack"]`) to summarize a string and DM it.
+✅ One `Slack Reporter` agent with `apps=["slack"]` and a task: "Write a 2-3 sentence executive summary at the top, then DM {recipient_email} the summary followed by the full body."
 
-❌ Two agents to read a string, summarize it, and post a Slack DM:
-```python
-summarizer       = Agent(role="Summarizer")
-slack_messenger  = Agent(role="Slack Sender", apps=["slack"])
-```
-
-✅ One agent with the connector and a task that tells it to summarize on top, then DM:
-```python
-slack_dm_agent = Agent(
-    role="Slack Reporter",
-    goal="Post a Slack DM containing a one-paragraph summary plus the full markdown body.",
-    apps=["slack"],
-)
-# Task: "Read the report below. Write a 2-3 sentence executive summary at the top.
-#        Post a DM to {recipient_email} with the summary followed by the full body."
-```
-
-### Heuristic
-
-> If two "agents" share the same persona, the same tool surface, and the same LLM, they are one agent with a longer task description.
+> **Heuristic:** if two "agents" share the same persona, the same tool surface, and the same LLM, they are one agent with a longer task description.
 
 ### Once you've decided "one agent is enough"
 
-Use `Agent.kickoff()` directly inside a Flow method — no `Crew`, no `Task` ceremony. The Flow owns sequencing and state; each step is a single agent kickoff. See **Section 4 — Agent.kickoff() — Direct Agent Execution** below for the full pattern, and the upstream docs at <https://docs.crewai.com/en/concepts/agents#direct-agent-interaction-with-kickoff>.
-
-Quick shape:
+Use `Agent.kickoff()` directly inside a Flow method - no `Crew`, no `Task` ceremony. The Flow owns sequencing and state; each step is a single agent kickoff (Flow mechanics: **build-flow** skill; docs: <https://docs.crewai.com/en/concepts/agents#direct-agent-interaction-with-kickoff>).
 
 ```python
 @listen(previous_step)
 def my_step(self):
-    agent = Agent(role="…", goal="…", backstory="…", tools=[...])
+    agent = Agent(role="…", goal="…", backstory="…", tools=[...], llm="anthropic/claude-haiku-4-5")
     result = agent.kickoff(
-        messages=f"Use this prior step's output: {self.state.prior_field}",
+        f"Use this prior step's output: {self.state.prior_field}",
         response_format=MyPydanticModel,  # optional
     )
     self.state.my_field = result.pydantic  # or result.raw
 ```
 
-Reach for `Crew.kickoff()` *only* when a step genuinely benefits from multi-agent collaboration (delegation, hierarchical management, parallel specialists feeding one synthesis). For "one agent does one job", `Agent.kickoff()` inside a Flow listener is the right primitive.
-
-Only after you've decided multi-agent is justified, read on for how to design each one.
+Reach for `Crew.kickoff()` *only* when a step genuinely benefits from multi-agent collaboration (delegation, hierarchical management, parallel specialists feeding one synthesis), or when the agent needs something that only works inside a crew task: **knowledge sources** and **`max_execution_time`** (Section 2).
 
 ---
 
 ## 1. The Role-Goal-Backstory Framework
 
-Every agent needs three things: **who** it is, **what** it wants, and **why** it's qualified.
+Every agent needs three things: **who** it is, **what** it wants, and **why** it's qualified. `{placeholders}` in all three are filled from `crew.kickoff(inputs={...})`.
 
 ### Role — Who the Agent Is
 
@@ -131,221 +110,133 @@ backstory: >
   You always cite your sources and flag uncertainty explicitly.
 ```
 
-**What to include in a backstory:**
-- Years/depth of experience
-- Specific domain knowledge
-- Working style and values (e.g., "always cites sources", "prefers concise output")
-- Quality standards the agent holds itself to
+**Include:** years/depth of experience, specific domain knowledge, working style and values ("always cites sources", "prefers concise output"), and the quality standards the agent holds itself to.
 
-**What NOT to include:**
-- Implementation details (tools, models, config)
-- Task-specific instructions (those go in the task description)
-- Arbitrary personality traits that don't affect output quality
+**Leave out:** implementation details (tools, models, config), task-specific instructions (those go in the task description), and personality traits that don't affect output quality.
 
 ---
 
 ## 2. Agent Configuration Reference
 
-### Essential Parameters
+`Agent` silently ignores keyword arguments it does not know, so a misspelled or removed parameter does nothing and raises nothing. Check `"name" in Agent.model_fields` when in doubt.
 
 ```python
 Agent(
-    role="...",              # Required: agent's expertise area
-    goal="...",              # Required: what the agent aims to achieve
-    backstory="...",         # Required: context and personality
-    llm="openai/gpt-4o",    # Optional: defaults to OPENAI_MODEL_NAME env var or "gpt-4"
-    tools=[...],             # Optional: list of tool instances
-)
-```
-
-### Execution Control
-
-```python
-Agent(
-    ...,
+    role="...", goal="...", backstory="...",   # Required
+    llm="anthropic/claude-haiku-4-5",          # See LLM Selection
+    tools=[...],                               # Tool instances
     max_iter=25,             # Max reasoning iterations per task (default: 25)
-    max_execution_time=300,  # Timeout in seconds (default: None — no limit)
-    max_rpm=10,              # Rate limit: max API calls per minute (default: None)
-    max_retry_limit=2,       # Retries on error (default: 2)
-    verbose=True,            # Show detailed execution logs (default: False)
+    max_execution_time=300,  # Seconds, crew tasks only (default: None - no limit)
+    max_rpm=10,              # Max LLM calls per minute for this agent (default: None)
+    max_retry_limit=2,       # Retries when task execution errors (default: 2)
+    allow_delegation=False,  # Default: False — agent works alone
+    respect_context_window=True,  # Summarize and continue on overflow (default: True)
+    inject_date=False,       # Put today's date in the prompt (default: False; format via date_format)
+    verbose=False,           # Detailed execution logs (default: False)
 )
 ```
 
-**Tuning `max_iter`:**
-- Default 25 is generous — most tasks finish in 3-8 iterations
-- Lower to 10-15 to fail faster when tasks are well-defined
-- If agent consistently hits max_iter, the task is too vague (fix the task, not the limit)
+### Execution limits (measured on 1.15.23)
 
-### Tool Configuration
+| Limit | Behaviour |
+|---|---|
+| `max_iter` | Reaching it does **not** raise. The agent is told to give its final answer now, and the run "succeeds" with whatever it has. With `max_iter=1`, a four-step tool procedure recorded one step and returned an incomplete answer. |
+| `max_rpm` | Calls over the limit block until the next minute window. With `max_rpm=2`, the third LLM call started at 62 s instead of about 2 s. |
+| `max_execution_time` | Applies only when the agent runs a `Task` inside a `Crew`; `Agent.kickoff()` ignores it (a 5 s limit with a 15 s tool completed normally after 17 s). In a crew it does **not** stop work at the deadline: the running tool and LLM calls finish, then the task raises `TimeoutError: Task '...' execution timed out after 5 seconds` (raised at 18.8 s), and the finished work is discarded. |
 
-```python
-from crewai_tools import SerperDevTool, ScrapeWebsiteTool, FileReadTool
+So `max_execution_time` turns a slow run into an error but does not stop a hang. To bound wall-clock time, set timeouts where the time is spent: `LLM(model=..., timeout=60)` and timeouts inside your tools, or run the kickoff in a subprocess you can kill.
 
-Agent(
-    ...,
-    tools=[SerperDevTool(), ScrapeWebsiteTool()],  # Agent-level tools
-)
-```
+**Tuning `max_iter`:** the default 25 is generous - most tasks finish in 3-8 iterations. Lower it to 10-15 to fail faster when tasks are well-defined. If an agent keeps hitting it, the task is too vague (fix the task, not the limit). Hitting it does not raise, so check outputs, not exit codes.
 
-**Key rules:**
-- An agent with **no tools** will hallucinate data when asked to search, fetch, or read files — always provide tools for tasks that require external data
-- Prefer **fewer, focused tools** over many tools — too many tools confuses the agent
-- Tools can also be assigned at the **task level** for task-specific access (see `design-task` skill)
-- Agent-level tools are available for all tasks the agent performs; task-level tools override for that specific task
+**Other switches:** `respect_context_window=True` summarizes the conversation and continues when the provider reports that the context length was exceeded; with `False` the run stops with `SystemExit: Context length exceeded ...`. `inject_date=True` is worth it for time-sensitive tasks (research, news, scheduling): asked for today's date, an agent with it answered correctly, and one without it answered UNKNOWN.
+
+### Tools
+
+- An agent with **no tools** will hallucinate data when asked to search, fetch, or read files - always provide tools for tasks that require external data.
+- Prefer **fewer, focused tools** - too many tools confuses the agent.
+- Agent-level tools are available for all tasks the agent performs. `Task(tools=[...])` **replaces** them for that task. In a live test, an agent with a weather tool given a task with only a population tool could call only the population tool.
+- Prebuilt tools need their keys (`SerperDevTool()` needs `SERPER_API_KEY`). Custom tools, the `crewai_tools` names that really exist, caching and MCP servers: **connect-tools-and-mcp**.
 
 ### LLM Selection
 
 ```python
-Agent(
-    ...,
-    llm="openai/gpt-4o",              # Main reasoning model
-    function_calling_llm="openai/gpt-4o-mini",  # Cheaper model for tool calls only
-)
+from crewai import LLM
+
+Agent(..., llm="anthropic/claude-haiku-4-5")
+Agent(..., llm=LLM(model="anthropic/claude-haiku-4-5", temperature=0.2, timeout=60))
 ```
 
-Use `function_calling_llm` to save costs: the main `llm` handles reasoning while a cheaper model handles tool-calling mechanics.
+- With no `llm=`, the agent uses env `MODEL`, then `MODEL_NAME`, then `OPENAI_MODEL_NAME`, else `gpt-4.1-mini`. That is an OpenAI model, so kickoff fails without `OPENAI_API_KEY`.
+- Only OpenAI ships with core crewai. `anthropic/...` needs `uv add "crewai[anthropic]"`, `gemini/...` needs `crewai[google-genai]`, and non-native providers need `crewai[litellm]` (full table in **check-crewai-api**).
+- Give mechanical agents a cheaper model. `function_calling_llm` (a separate model for tool calls) is deprecated on both `Agent` and `Crew` - set each agent's `llm` instead.
 
 ### Collaboration
 
-```python
-Agent(
-    ...,
-    allow_delegation=False,  # Default: False — agent works alone
-)
-```
-
-Set `allow_delegation=True` only when:
-- The agent is part of a crew with other specialized agents
-- The task genuinely benefits from the agent handing off subtasks
-- You're using hierarchical process where the manager delegates
-
-**Warning:** Delegation without clear task boundaries leads to infinite loops or wasted iterations.
+Set `allow_delegation=True` only when the agent is part of a crew with other specialized agents, the task genuinely benefits from handing off subtasks, or you're using hierarchical process where the manager delegates. **Warning:** delegation without clear task boundaries leads to infinite loops or wasted iterations.
 
 ### Planning (Plan-and-Execute Mode)
 
-When a `PlanningConfig` is set on an agent, `Agent.kickoff()` (and `Agent.execute_task()`) routes through the new `crewai.experimental.AgentExecutor`. Instead of a single ReAct-style loop, the agent:
-
-1. **Generates a plan** — a list of `PlanStep`s, each with a description and optional `tool_to_use`. Stored as `state.todos`.
-2. **Executes each step** via a `StepExecutor` in an isolated multi-turn LLM loop (capped by `max_step_iterations`).
-3. **Observes the result** via a `PlannerObserver` after every step — did the step succeed? Is the remaining plan still valid?
-4. **Routes the next action** based on the agent's `reasoning_effort` setting (see below).
-
-The presence of a `PlanningConfig` enables the mode. To disable: don't pass one, or set `planning=False`.
+With a `PlanningConfig`, the agent first generates a plan (a list of steps), executes each step in its own multi-turn loop (capped by `max_step_iterations`), checks each result, then continues, replans, or finishes early.
 
 ```python
 from crewai import Agent
 from crewai.agent.planning_config import PlanningConfig
 
 agent = Agent(
-    role="…",
-    goal="…",
-    backstory="…",
-    tools=[...],
+    role="…", goal="…", backstory="…", tools=[...],
     planning_config=PlanningConfig(reasoning_effort="medium"),  # most common
 )
 ```
 
-#### `reasoning_effort` — pick one
+To disable planning, omit `planning_config`. `planning=True` alone is shorthand for `PlanningConfig(reasoning_effort="low", max_attempts=1)`. `reasoning=True` is deprecated (DeprecationWarning) - use `planning_config`.
 
-| Level | After each step the planner... | Pick when |
+| `reasoning_effort` | After each step the planner... | Pick when |
 |---|---|---|
-| `"low"` | observes (validates success), marks the todo complete, continues. **No replan, no refine.** | You want plan visibility (todos, observations) but trust the agent to follow it linearly. Fastest. |
-| `"medium"` (default) | observes; **replans on failure only**. Successful steps just continue. | The agent's tools can fail (network, exec, scrape) and you want graceful recovery without paying refinement cost on every success. **The right default for sandbox-coding, research, and other tool-heavy loops.** |
-| `"high"` | observes, then routes through `decide_next_action` which can trigger early goal achievement, full replan, or lightweight refinement after every step. | The task changes shape based on intermediate findings, or you need maximum adaptiveness. Most LLM calls per run. |
-
-Source: `crewai/experimental/agent_executor.py:450` (`observe_step_result` router) and `crewai/agent/planning_config.py`.
-
-#### Other `PlanningConfig` knobs
+| `"low"` | checks the step with a heuristic (**no extra LLM call**) and continues. No replan, no refine. | You want plan visibility (todos, observations) but trust the agent to follow it linearly. Fastest. |
+| `"medium"` (default) | observes the step with an LLM call; **replans on failure only**. | The agent's tools can fail (network, exec, scrape) and you want graceful recovery. **The right default for sandbox-coding, research, and other tool-heavy loops.** |
+| `"high"` | observes, then can finish early, replan fully, or refine the plan after every step. | The task changes shape based on intermediate findings, or you need maximum adaptiveness. Most LLM calls per run. |
 
 ```python
 PlanningConfig(
     reasoning_effort="medium",
-    max_steps=20,            # cap on planned steps (default 20)
-    max_replans=3,           # max full re-plans before finalizing (default 3)
-    max_attempts=None,       # planning refinement attempts during plan generation
-    max_step_iterations=15,  # max LLM turns per step's StepExecutor (default 15)
-    step_timeout=None,       # wall-clock seconds per step; None = no cap
-    system_prompt=None,      # custom planning system prompt (uses default if None)
-    plan_prompt=None,        # custom initial-plan prompt; placeholders: {description}, {expected_output}, {tools}, {max_steps}
-    refine_prompt=None,      # custom refinement prompt
-    llm=None,                # separate LLM for planning (else uses agent.llm)
+    observe_steps=None,      # None = LLM observation for medium/high, heuristic for low
+    max_steps=20,            # cap on planned steps
+    max_replans=3,           # full re-plans before finalizing
+    max_attempts=None,       # refinement attempts during plan generation
+    max_step_iterations=15,  # LLM turns per step
+    step_timeout=None,       # wall-clock seconds per step
+    system_prompt=None, plan_prompt=None, refine_prompt=None,  # custom prompts
+    llm=None,                # separate (cheaper) LLM for planning; else agent.llm
 )
 ```
 
-Use `llm="anthropic/claude-haiku-4-5"` (cheap) for the planner while keeping `agent.llm="anthropic/claude-opus-4-7"` (strong) for execution — common cost optimization.
+**When to enable:** for autonomous loops where the agent picks its own steps and you want failure recovery (a coding agent that writes → runs → patches; a research agent that searches → scrapes → revises). **Skip** it for single-tool, single-purpose calls ("summarize this string", "post this Slack DM").
 
-#### When to enable
-
-- **Enable** for autonomous loops where the agent picks its own steps and you want failure recovery (e.g. coding agent that writes → runs → patches; research agent that searches → scrapes → revises).
-- **Skip** for single-tool, single-purpose calls (e.g. "summarize this string", "post this Slack DM") — observation overhead doesn't pay off.
-
-#### Cost shape
-
-Every step gets a `PlannerObserver` LLM call (~1 extra call per step). On `"medium"` a failed step adds a replan call. On `"high"` every step adds a `decide_next_action` call too. For an N-step plan, expect roughly:
-
-- `low`: N execution + N observation = **2N calls**
-- `medium`: 2N + (failures × 1 replan)
-- `high`: ~3N + replans/refines
-
-Material at scale — measure before defaulting `high` for everything.
-
-#### Custom `plan_prompt`
-
-If you supply `plan_prompt`, include the placeholders the planner template expects: `{description}`, `{expected_output}`, `{tools}`, `{max_steps}`. The planner LLM gets these interpolated. Keep custom prompts focused on *project-specific* rules; let `description`/`tools` (auto-injected) carry the dynamic content.
+**Cost:** In one measured run, planning added 3-7 calls to a two-step task and wrapped the answer in prose. Measure on your own tasks before turning it on.
 
 ### Code Execution
 
-```python
-Agent(
-    ...,
-    allow_code_execution=True,        # Enable code execution (default: False)
-    code_execution_mode="safe",       # "safe" (Docker) or "unsafe" (direct) — default: "safe"
-)
-```
-
-- `"safe"` requires Docker installed and running — executes in a container
-- `"unsafe"` runs code directly on the host — only use in controlled environments
-
-### Context Window Management
-
-```python
-Agent(
-    ...,
-    respect_context_window=True,      # Auto-summarize to stay within limits (default: True)
-)
-```
-
-When `True`, the agent automatically summarizes prior context if it approaches the LLM's token limit. When `False`, execution stops with an error on overflow.
-
-### Date Injection
-
-```python
-Agent(
-    ...,
-    inject_date=True,                 # Add current date to task context (default: False)
-    date_format="%Y-%m-%d",           # Date format (default: "%Y-%m-%d")
-)
-```
-
-Enable for time-sensitive tasks (research, news analysis, scheduling).
+`allow_code_execution` and `code_execution_mode` are deprecated no-ops (`allow_code_execution=True` emits a DeprecationWarning), and `CodeInterpreterTool` no longer exists in `crewai_tools`. Give the agent a sandbox tool such as `E2BPythonTool` or `DaytonaPythonTool` instead (see **connect-tools-and-mcp**).
 
 ### Agent Guardrails
 
 ```python
-def validate_no_pii(result) -> tuple[bool, Any]:
-    """Reject output containing PII."""
-    if contains_pii(result.raw):
-        return (False, "Output contains PII. Remove all personal information and try again.")
-    return (True, result)
+from typing import Any
 
-Agent(
-    ...,
-    guardrail=validate_no_pii,
-    guardrail_max_retries=3,          # default: 3
-)
+def require_uppercase(result) -> tuple[bool, Any]:
+    if result.raw != result.raw.upper():
+        return (False, "Rewrite the whole answer in UPPERCASE letters only.")
+    return (True, result.raw)
+
+agent = Agent(..., guardrail=require_uppercase, guardrail_max_retries=3)  # default retries: 3
+result = agent.kickoff("...")   # the agent guardrail runs here
 ```
 
-Agent guardrails validate every output the agent produces. The agent retries on failure up to `guardrail_max_retries`.
+A guardrail can also be a string, which is checked by an extra LLM call. Agent guardrails have two limits on 1.15.23, both verified with a real LLM:
+- **They run only on `Agent.kickoff()`.** When the same agent executes a `Task` in a `Crew`, the agent guardrail is never called.
+- **On crewai 1.15.23 the agent-level guardrail retry re-sent the original prompt without the feedback**, and all three attempts failed the uppercase check above. Prefer a task-level guardrail, which passes the feedback. When retries run out, `kickoff` raises `ValueError: Agent's guardrail failed validation after N retries. Last error: ...`.
+
+When output must be fixed and not just rejected, put the guardrail on the **Task** (`Task(guardrail=..., guardrail_max_retries=...)`). The error message is fed back there, and the same uppercase check passed on the second attempt. See `design-task` and **check-crewai-api**.
 
 ### Knowledge Sources
 
@@ -354,23 +245,22 @@ from crewai.knowledge.source.text_file_knowledge_source import TextFileKnowledge
 
 Agent(
     ...,
-    knowledge_sources=[
-        TextFileKnowledgeSource(file_paths=["company_handbook.txt"]),
-    ],
-    embedder={
-        "provider": "openai",
-        "config": {"model": "text-embedding-3-small"},
-    },
+    knowledge_sources=[TextFileKnowledgeSource(file_paths=["company_handbook.txt"])],  # read from ./knowledge/
+    embedder={"provider": "onnx"},   # local, no API key; omit it to use OpenAI embeddings
 )
 ```
 
-Knowledge sources give agents access to domain-specific data via RAG. Use when agents need to reference large documents, policies, or datasets.
+Knowledge sources give agents domain-specific data via RAG. Use them when agents need to reference large documents, policies, or datasets. Two things to know:
+- **Agent knowledge is only queried when the agent runs a task inside a `Crew`.** `Agent.kickoff()` silently ignores `knowledge_sources`. In a live test, the same agent answered "UNKNOWN" from `kickoff()` and correctly from a one-task crew.
+- Without `embedder=`, knowledge uses OpenAI embeddings. With no `OPENAI_API_KEY`, agent knowledge raises `ValueError: Invalid Knowledge Configuration` at crew kickoff. Crew-level knowledge only logs `Failed to upsert documents` and runs **without** it.
+
+Embedders that work without OpenAI, `KnowledgeConfig`, memory and storage paths: [references/memory-and-knowledge.md](references/memory-and-knowledge.md).
 
 ---
 
 ## 3. YAML Configuration (Recommended)
 
-Define agents in `agents.yaml` for clean separation of config and code:
+Define agents in `agents.yaml` for clean separation of config and code. Create a YAML project with `crewai create crew <name> --classic`. Without `--classic`, `crewai create crew` starts an interactive wizard that writes a JSON project instead.
 
 ```yaml
 researcher:
@@ -384,12 +274,8 @@ researcher:
     Known for finding obscure but relevant sources and
     synthesizing complex findings into clear insights.
     You always cite your sources and flag uncertainty.
-  # Optional overrides (uncomment as needed):
-  # llm: openai/gpt-4o
-  # max_iter: 15
-  # max_rpm: 10
-  # allow_delegation: false
-  # verbose: true
+  # Optional overrides: llm: anthropic/claude-haiku-4-5, max_iter: 15, max_rpm: 10,
+  # allow_delegation: false, verbose: true
 ```
 
 Then wire in `crew.py`:
@@ -402,255 +288,93 @@ class MyCrew:
 
     @agent
     def researcher(self) -> Agent:
-        return Agent(
-            config=self.agents_config["researcher"],
-            tools=[SerperDevTool()],
-        )
+        return Agent(config=self.agents_config["researcher"], tools=[SerperDevTool()])
 ```
 
-**Critical:** The method name (`def researcher`) must match the YAML key (`researcher:`). Mismatch causes `KeyError`.
+**Critical:** The method name (`def researcher`) must match the YAML key (`researcher:`). Mismatch causes `KeyError` (verified: `KeyError: 'researcher'`).
+
+Verified live: `llm` and `max_iter` set in YAML are applied, `{topic}` in the role is filled at kickoff, and tools attach in Python. Keep tools, guardrail functions and Pydantic models in Python; YAML holds the text and scalar settings.
 
 ---
 
 ## 4. Agent.kickoff() — Direct Agent Execution
 
-Use `Agent.kickoff()` when you need one agent with tools and reasoning, without crew overhead. This is the most common pattern in Flows.
-
-### Basic Usage
+Use `Agent.kickoff()` when you need one agent with tools and reasoning, without crew overhead. This is the most common pattern in Flows. It does not use the agent's knowledge sources or `max_execution_time` (Section 2).
 
 ```python
+from pydantic import BaseModel
 from crewai import Agent
-from crewai_tools import SerperDevTool
 
 researcher = Agent(
     role="Senior Research Analyst",
     goal="Find comprehensive, factual information with source citations",
     backstory="Expert researcher known for thorough, evidence-based analysis.",
-    tools=[SerperDevTool()],
-    llm="openai/gpt-4o",
+    tools=[...],
+    llm="anthropic/claude-haiku-4-5",
 )
 
-# Pass a string prompt — the agent reasons, uses tools, and returns a result
 result = researcher.kickoff("What are the latest developments in quantum computing?")
 print(result.raw)             # str — the agent's full response
-print(result.usage_metrics)   # token usage stats
-```
-
-### With Structured Output
-
-```python
-from pydantic import BaseModel
+print(result.usage_metrics)   # dict: total_tokens, prompt_tokens, completion_tokens, ...
 
 class ResearchFindings(BaseModel):
     key_trends: list[str]
     sources: list[str]
     confidence: float
 
-result = researcher.kickoff(
-    "Research the latest AI agent frameworks",
-    response_format=ResearchFindings,
-)
+result = researcher.kickoff("Research the latest AI agent frameworks", response_format=ResearchFindings)
+print(result.pydantic.key_trends, result.pydantic.confidence)
 
-# Access via .pydantic (NOT directly — Agent.kickoff wraps the result)
-print(result.pydantic.key_trends)    # list[str]
-print(result.pydantic.confidence)    # float
-print(result.raw)                    # raw string version
+result = await researcher.kickoff_async("...", response_format=ResearchFindings)  # async variant
 ```
 
-> **Note:** `Agent.kickoff()` returns `LiteAgentOutput` — access structured output via `result.pydantic`. This differs from `LLM.call()` which returns the Pydantic object directly.
+> **Note:** `Agent.kickoff()` returns `LiteAgentOutput` - access structured output via `result.pydantic`. This differs from `llm.call(messages, response_model=Model)`, which returns the Pydantic object directly. `Agent.kickoff(..., response_model=...)` is a `TypeError`.
 
-### With File Inputs
+**File inputs** need an extra: `uv add "crewai[file-processing]"`, then `from crewai_files import FileInput` and `researcher.kickoff("Summarize this document", input_files={"document": FileInput(path="report.pdf")})`. Without the extra, the import fails with `ModuleNotFoundError: No module named 'crewai_files'`.
 
-```python
-result = researcher.kickoff(
-    "Analyze this document and summarize the key findings",
-    input_files={"document": FileInput(path="report.pdf")},
-)
-```
+**Agent.kickoff() vs Crew.kickoff():** use `Agent.kickoff()` when each step is a distinct agent and a Flow controls sequencing (the Section 0 shape - verified live as a two-step Flow). Use `Crew.kickoff()` when multiple agents collaborate on related tasks within a single step, or the agent needs knowledge sources or `max_execution_time`.
 
-### Async Variant
+### Agents in Conversational Flow Routes
 
-```python
-result = await researcher.kickoff_async(
-    "Research quantum computing breakthroughs",
-    response_format=ResearchFindings,
-)
-```
-
-### Agent.kickoff() in Flows (Recommended Pattern)
-
-The most powerful pattern is orchestrating multiple `Agent.kickoff()` calls inside a Flow. The Flow handles state and sequencing; each agent handles its specific step:
-
-```python
-from crewai import Agent
-from crewai.flow.flow import Flow, listen, start
-from crewai_tools import SerperDevTool, ScrapeWebsiteTool
-from pydantic import BaseModel
-
-class ResearchState(BaseModel):
-    topic: str = ""
-    research: str = ""
-    analysis: str = ""
-    report: str = ""
-
-class ResearchFlow(Flow[ResearchState]):
-
-    @start()
-    def gather_data(self):
-        researcher = Agent(
-            role="Senior Researcher",
-            goal="Find comprehensive data with sources",
-            backstory="Expert at finding and validating information.",
-            tools=[SerperDevTool(), ScrapeWebsiteTool()],
-        )
-        result = researcher.kickoff(f"Research: {self.state.topic}")
-        self.state.research = result.raw
-
-    @listen(gather_data)
-    def analyze(self):
-        analyst = Agent(
-            role="Data Analyst",
-            goal="Extract actionable insights from raw research",
-            backstory="Skilled at pattern recognition and synthesis.",
-        )
-        result = analyst.kickoff(
-            f"Analyze this research and extract key insights:\n\n{self.state.research}"
-        )
-        self.state.analysis = result.raw
-
-    @listen(analyze)
-    def write_report(self):
-        writer = Agent(
-            role="Report Writer",
-            goal="Create clear, well-structured reports",
-            backstory="Technical writer who makes complex topics accessible.",
-        )
-        result = writer.kickoff(
-            f"Write a comprehensive report from this analysis:\n\n{self.state.analysis}"
-        )
-        self.state.report = result.raw
-
-flow = ResearchFlow()
-flow.kickoff(inputs={"topic": "AI agents"})
-print(flow.state.report)
-```
-
-**When to use Agent.kickoff() vs Crew.kickoff():**
-- Use `Agent.kickoff()` when each step is a distinct agent and the Flow controls sequencing
-- Use `Crew.kickoff()` when multiple agents need to collaborate on related tasks within a single step
-
-### Agent.kickoff() in Conversational Flow Routes
-
-In experimental conversational Flows, the Flow owns the chat lifecycle and route selection. Agents should be called inside route handlers for bounded tool-backed work: research, docs lookup, account actions, triage, drafting, or escalation prep.
-
-```python
-from crewai import Agent, Flow
-from crewai.flow import listen
-from crewai.experimental.conversational import ConversationState
-
-
-class SupportFlow(Flow[ConversationState]):
-    conversational = True
-
-    def research_agent(self) -> Agent:
-        return Agent(
-            role="Support Research Specialist",
-            goal="Find accurate information with sources for the user's current question.",
-            backstory="You are precise, evidence-driven, and explicit about uncertainty.",
-            tools=[...],
-        )
-
-    @listen("RESEARCH")
-    def handle_research(self) -> str:
-        """Fresh research, current lookups, and source-backed synthesis."""
-        result = self.research_agent().kickoff(self.state.current_user_message)
-        self.append_agent_result("research_agent", result, visibility="private")
-        reply = result.raw
-        self.append_assistant_message(reply)
-        return reply
-```
+In conversational Flows (`from crewai.flow import ConversationState`), the Flow owns the chat lifecycle and route selection. Call agents inside route handlers for bounded tool-backed work: research, docs lookup, account actions, triage, drafting, or escalation prep. The mechanics (`handle_turn`, `ConversationConfig`, a tested example) are in the **build-flow** skill's conversational-flows reference.
 
 Design implications:
 - Keep the conversational `Flow` responsible for session id, message history, routing, trace finalization, and approvals.
 - Keep each agent narrow: one route, one tool surface, one job.
-- Use `append_agent_result(..., visibility="private")` for scratch work that should not enter canonical chat history.
-- Use `append_assistant_message(reply)` for the user-visible answer so the next turn has the assistant context.
+- Use `self.append_agent_result(name, result, visibility="private")` for scratch work that should not enter canonical chat history.
+- Return the user-visible reply from the handler (or call `self.append_assistant_message(reply)`) so the next turn has the assistant context.
 - Do not make a "chat agent" with every tool. Route first, then invoke a focused agent for the selected route.
-
-See the getting-started reference for the Flow lifecycle: `skills/getting-started/references/conversational-flows.md`.
 
 ---
 
 ## 5. Specialist vs Generalist Agents
 
-> **Note:** Apply this section *after* you've decided you genuinely need multiple agents (see Section 0). If you only need one agent, "specialist vs generalist" is not the question — the question is just how to design that one agent.
+> Apply this section *after* you've decided you genuinely need multiple agents (Section 0). With one agent, the only question is how to design that agent.
 
-**When you do need multiple agents, prefer specialists.** An agent that does one thing well outperforms one that does many things acceptably.
+**When you do need multiple agents, prefer specialists.** An agent that does one thing well outperforms one that does many things acceptably. Use a specialist when the task needs deep domain knowledge, quality matters more than speed, or the task is complex enough to benefit from focused expertise. A generalist is acceptable for simple tasks with clear instructions, for prototyping you'll specialize later, and for tasks that truly span several domains equally.
 
-### When to Use a Specialist
-
-- Task requires deep domain knowledge
-- Output quality matters more than speed
-- The task is complex enough to benefit from focused expertise
-
-### When a Generalist Is Acceptable
-
-- Simple tasks with clear instructions
-- Prototyping where you'll specialize later
-- Tasks that truly span multiple domains equally
-
-### Specialist Design Pattern
-
-Instead of one "Content Writer" agent, create:
-- `technical_writer` — deep technical accuracy, code examples
-- `copywriter` — persuasive, audience-focused marketing copy
-- `editor` — grammar, consistency, style guide enforcement
-
-Each specialist has a narrow role, specific goal, and backstory that reinforces their expertise.
+Instead of one "Content Writer" agent, create `technical_writer` (technical accuracy, code examples), `copywriter` (persuasive, audience-focused copy) and `editor` (grammar, consistency, style guide). Each has a narrow role, specific goal, and a backstory that reinforces that expertise.
 
 ---
 
 ## 6. Agent Interaction Patterns
 
-### Sequential (Default)
+**Sequential (default):** `Researcher → Writer → Editor`. Agents work one after another, and each receives prior outputs as context. Best for linear pipelines where each step builds on the last.
 
-Agents work one after another. Each agent receives prior agents' outputs as context.
-
-```
-Researcher → Writer → Editor
-```
-
-Best for: linear pipelines where each step builds on the last.
-
-### Hierarchical
-
-A manager agent delegates and validates. Task assignment is dynamic.
+**Hierarchical:** a manager agent delegates and validates; task assignment is dynamic. Best for complex workflows where assignment depends on intermediate results.
 
 ```python
 Crew(
     agents=[researcher, writer, editor],
     tasks=[research_task, writing_task, editing_task],
     process=Process.hierarchical,
-    manager_llm="openai/gpt-4o",
+    manager_llm="anthropic/claude-haiku-4-5",   # or manager_agent=...; one is required
 )
 ```
 
-Best for: complex workflows where task assignment depends on intermediate results.
+Without `manager_llm` or `manager_agent`, `Crew(...)` raises a `ValidationError`.
 
-### Agent-to-Agent Delegation
-
-When `allow_delegation=True`, an agent can ask another crew agent for help:
-
-```python
-lead_researcher = Agent(
-    role="Lead Researcher",
-    goal="Coordinate research efforts",
-    backstory="...",
-    allow_delegation=True,  # Can delegate to other agents in the crew
-)
-```
-
-The agent will automatically discover other crew members and delegate subtasks as needed.
+**Agent-to-agent delegation:** with `allow_delegation=True`, an agent gets two tools, `Delegate work to coworker` and `Ask question to coworker`, that name the other crew members. Verified live: asked to get a sentence from the Writer, a lead agent called `ask_question_to_coworker` and returned the Writer's answer.
 
 ---
 
@@ -664,8 +388,12 @@ The agent will automatically discover other crew members and delegate subtasks a
 | Backstory full of task instructions | Agent mixes personality with task execution | Keep backstory about WHO the agent is; task details go in the task |
 | `allow_delegation=True` by default | Agents waste iterations delegating trivially | Only enable when delegation genuinely helps |
 | max_iter too high for simple tasks | Agent loops unnecessarily on vague tasks | Lower max_iter; fix the task description instead |
-| No guardrail on critical output | Bad output passes through unchecked | Add guardrails for outputs that feed into production systems |
-| Using expensive LLM for tool calls | Unnecessary cost for mechanical operations | Set `function_calling_llm` to a cheaper model |
+| No guardrail on critical output | Bad output passes through unchecked | Add a Task guardrail for outputs that feed into production systems |
+| Agent guardrail on an agent used in a Crew | Guardrail never runs | Put the guardrail on the Task |
+| Trusting `max_execution_time` to stop a hang | It raises only after the slow call returns, and `Agent.kickoff()` ignores it | Add LLM and tool timeouts |
+| Knowledge sources on an agent run via `Agent.kickoff()` | Knowledge silently unused | Run it as a crew task, or put the facts in the prompt |
+| No `llm=` and no OpenAI key | Kickoff fails: the default is OpenAI `gpt-4.1-mini` | Set `llm=` (or env `MODEL`) and install the provider extra |
+| Planning on a simple task | 2-3x the LLM calls, sometimes a worse answer | Enable planning only for open-ended tool loops |
 
 ---
 
@@ -679,9 +407,10 @@ Before deploying an agent, verify:
 - [ ] **Tools** are assigned for any task requiring external data
 - [ ] **No excess tools** — 3-5 per agent maximum
 - [ ] **max_iter** is tuned for expected task complexity (10-15 for simple, 20-25 for complex)
-- [ ] **max_execution_time** is set for production agents to prevent hangs
-- [ ] **Guardrails** are configured for critical outputs
-- [ ] **LLM** is appropriate for task complexity (don't use GPT-4 for classification)
+- [ ] **Timeouts** are set where time is spent (LLM `timeout`, tool timeouts); `max_execution_time` is only a backstop for crew tasks
+- [ ] **Guardrails** for critical outputs are on the Task
+- [ ] **LLM** is set explicitly, fits the task's complexity, and has its provider extra installed
+- [ ] **Knowledge** has an explicit `embedder`, and the agent runs inside a crew
 - [ ] **Delegation** is disabled unless genuinely needed
 
 ---
@@ -691,10 +420,14 @@ Before deploying an agent, verify:
 For deeper dives into specific topics, see:
 
 - [Custom Tools](references/custom-tools.md) — building your own tools with `@tool` decorator and `BaseTool` subclass
-- [Memory & Knowledge](references/memory-and-knowledge.md) — memory configuration, knowledge sources, embedder setup, scoping
+- [Memory & Knowledge](references/memory-and-knowledge.md) - memory, knowledge sources, embedders that work without OpenAI, storage, scoping
 
 For related skills:
 
-- **getting-started** — project scaffolding, choosing the right abstraction, Flow architecture
+- **check-crewai-api** - current imports, parameters, defaults and provider extras
+- **connect-tools-and-mcp** - custom tools, real `crewai_tools` names, caching, MCP servers
+- **build-flow** - Flow state, routing, persistence, conversational flows
+- **getting-started** - project scaffolding, choosing the right abstraction
 - **design-task** — task description/expected_output best practices, guardrails, structured output, dependencies
-- **ask-docs** — query the live CrewAI documentation MCP server for questions not covered by these skills
+- **test-crewai-project** - testing agents and crews offline with a stub LLM
+- **ask-docs** - query the live CrewAI docs for questions not covered by these skills
